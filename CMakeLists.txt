@@ -10,13 +10,27 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-add_executable(quantforge
-    cpp/src/main.cpp
+
+# QuantForge Core Library
+add_library(quantforge-core
+
     cpp/src/core/event.cpp
     cpp/src/core/event_type.cpp
 )
 
-target_include_directories(quantforge
-    PRIVATE
+target_include_directories(quantforge-core
+    PUBLIC
         cpp/include
+)
+
+
+# QuantForge Application
+add_executable(quantforge
+
+    cpp/src/app/main.cpp
+)
+
+target_link_libraries(quantforge
+    PRIVATE
+        quantforge-core
 )
