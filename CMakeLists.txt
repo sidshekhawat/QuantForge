@@ -12,6 +12,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_executable(quantforge
     cpp/src/main.cpp
+    cpp/src/core/event.cpp
+    cpp/src/core/event_type.cpp
 )
 
 target_include_directories(quantforge
