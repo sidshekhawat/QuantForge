@@ -18,6 +18,7 @@ add_library(quantforge-core
 
     cpp/src/core/event.cpp
     cpp/src/core/event_type.cpp
+    cpp/src/market/instrument.cpp
 )
 
 target_include_directories(quantforge-core
@@ -46,6 +47,10 @@ find_package(GTest REQUIRED)
 add_executable(quantforge-tests
 
     cpp/tests/core/event_test.cpp
+    cpp/tests/market/instrument_id_test.cpp
+    cpp/tests/market/instrument_test.cpp
+    cpp/tests/market/price_test.cpp
+    cpp/tests/market/quantity_test.cpp
 )
 
 target_link_libraries(quantforge-tests
