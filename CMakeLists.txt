@@ -34,3 +34,24 @@ target_link_libraries(quantforge
     PRIVATE
         quantforge-core
 )
+
+
+# Testing
+enable_testing()
+
+find_package(GTest REQUIRED)
+
+add_executable(quantforge-tests
+
+    cpp/tests/core/event_test.cpp
+)
+
+target_link_libraries(quantforge-tests
+    PRIVATE
+        quantforge-core
+        GTest::gtest_main
+)
+
+include(GoogleTest)
+
+gtest_discover_tests(quantforge-tests)
