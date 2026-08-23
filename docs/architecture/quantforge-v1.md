@@ -1687,15 +1687,27 @@ Generated environments and build artifacts do not belong in Git.
 
 # 50. Decisions Still To Be Finalized
 
-The following should be finalized before implementing the corresponding subsystem:
+The following decisions have been finalized for the V1 Market Data foundation:
+
+| Decision | V1 Choice |
+|---|---|
+| Instrument ID | `std::uint64_t` |
+| Asset Class | Strongly typed `enum class` |
+| Price representation | Fixed-point integer |
+| Quantity representation | Fixed-point integer |
+| Timestamp | UTC nanosecond precision |
+| Core timestamp type | `std::chrono::sys_time<std::chrono::nanoseconds>` |
+| Core timezone | UTC |
+| Exchange timezone | Stored as instrument / market metadata |
+| Initial market data | OHLCV bars |
+| Historical storage | Apache Parquet |
+| Data interoperability | Apache Arrow |
+| Initial validation | Explicit and deterministic |
+
+The following architectural decisions remain open and will be finalized before their respective subsystems are implemented:
 
 ```text
-InstrumentId representation
-AssetClass representation
 Timeframe representation
-Price representation
-Volume representation
-Timestamp precision
 Dataset partitioning
 Dataset versioning
 Data provider interfaces
@@ -1709,9 +1721,6 @@ Execution model
 Backtest clock
 Slippage model
 Commission model
-```
-
-These decisions should be documented before implementation when they materially affect architecture.
 
 ---
 
