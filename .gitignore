@@ -6,7 +6,8 @@ cmake-build-*/
 .DS_Store
 
 # IDE
-.vscode/
+.vscode/*
+!.vscode/settings.json
 .idea/
 
 # Python
