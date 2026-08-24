@@ -1703,6 +1703,9 @@ The following decisions have been finalized for the V1 Market Data foundation:
 | Historical storage | Apache Parquet |
 | Data interoperability | Apache Arrow |
 | Initial validation | Explicit and deterministic |
+| Timeframe representation | Strongly typed value + unit |
+| Supported V1 timeframe units | Tick, Second, Minute, Hour, Day |
+| Calendar periods | Deferred until trading calendar subsystem |
 
 The following architectural decisions remain open and will be finalized before their respective subsystems are implemented:
 
