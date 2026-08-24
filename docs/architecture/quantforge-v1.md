@@ -1706,6 +1706,8 @@ The following decisions have been finalized for the V1 Market Data foundation:
 | Timeframe representation | Strongly typed value + unit |
 | Supported V1 timeframe units | Tick, Second, Minute, Hour, Day |
 | Calendar periods | Deferred until trading calendar subsystem |
+| Bar timestamp semantics | Interval start time |
+| Bar interval model | [timestamp, timestamp + timeframe) |
 
 The following architectural decisions remain open and will be finalized before their respective subsystems are implemented:
 

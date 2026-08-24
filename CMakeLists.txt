@@ -19,6 +19,7 @@ add_library(quantforge-core
     cpp/src/core/event.cpp
     cpp/src/core/event_type.cpp
     cpp/src/market/instrument.cpp
+    cpp/src/market/bar.cpp
 )
 
 target_include_directories(quantforge-core
@@ -53,6 +54,7 @@ add_executable(quantforge-tests
     cpp/tests/market/quantity_test.cpp
     cpp/tests/market/timestamp_test.cpp
     cpp/tests/market/timeframe_test.cpp
+    cpp/tests/market/bar_test.cpp
 )
 
 target_link_libraries(quantforge-tests
