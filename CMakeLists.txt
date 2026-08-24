@@ -51,6 +51,8 @@ add_executable(quantforge-tests
     cpp/tests/market/instrument_test.cpp
     cpp/tests/market/price_test.cpp
     cpp/tests/market/quantity_test.cpp
+    cpp/tests/market/timestamp_test.cpp
+    cpp/tests/market/timeframe_test.cpp
 )
 
 target_link_libraries(quantforge-tests
