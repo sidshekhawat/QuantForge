@@ -59,6 +59,7 @@ add_executable(quantforge-tests
     cpp/tests/market/bar_test.cpp
     cpp/tests/market/validation_result_test.cpp
     cpp/tests/market/bar_validator_test.cpp
+    cpp/tests/marketdata/market_data_request_test.cpp
 )
 
 target_link_libraries(quantforge-tests
