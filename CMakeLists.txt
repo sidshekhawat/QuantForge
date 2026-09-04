@@ -64,6 +64,7 @@ add_executable(quantforge-tests
     cpp/tests/marketdata/market_data_request_test.cpp
     cpp/tests/marketdata/market_data_request_validator_test.cpp
     cpp/tests/market/timeframe_test.cpp
+    cpp/tests/marketdata/market_data_exception_test.cpp
 )
 
 target_link_libraries(quantforge-tests
