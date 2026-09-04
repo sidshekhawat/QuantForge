@@ -44,16 +44,61 @@ public:
         return !(lhs == rhs);
     }
 
-private:
-    static constexpr ValueType pow10(ScaleType exponent) noexcept {
-        ValueType result = 1;
+    friend constexpr bool operator<(
+        Price lhs,
+        Price rhs
+    ) noexcept {
+        if (lhs.scale_ == rhs.scale_) {
+            return lhs.value_ < rhs.value_;
+        }
 
-        for (ScaleType i = 0; i < exponent; ++i) {
+        if (lhs.scale_ > rhs.scale_) {
+            return lhs.value_ <
+                rhs.value_ * pow10(lhs.scale_ - rhs.scale_);
+        }
+
+        return lhs.value_ * pow10(rhs.scale_ - lhs.scale_) <
+            rhs.value_;
+    }
+
+    friend constexpr bool operator>(
+        Price lhs,
+        Price rhs
+    ) noexcept {
+        return rhs < lhs;
+    }
+
+    friend constexpr bool operator<=(
+        Price lhs,
+        Price rhs
+    ) noexcept {
+        return !(rhs < lhs);
+    }
+
+    friend constexpr bool operator>=(
+        Price lhs,
+        Price rhs
+    ) noexcept {
+        return !(lhs < rhs);
+    }
+
+private:
+    static constexpr std::int64_t pow10(
+        std::uint8_t exponent
+    ) noexcept {
+        std::int64_t result = 1;
+
+        for (
+            std::uint8_t i = 0;
+            i < exponent;
+            ++i
+        ) {
             result *= 10;
         }
 
         return result;
     }
+
     ValueType value_;
     ScaleType scale_;
 };
