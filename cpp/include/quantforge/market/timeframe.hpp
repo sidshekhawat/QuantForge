@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string_view>
 
 namespace quantforge::market {
 
@@ -11,7 +12,6 @@ enum class TimeframeUnit {
     Hour,
     Day
 };
-
 
 class Timeframe {
 public:
@@ -51,5 +51,7 @@ private:
     ValueType value_;
     TimeframeUnit unit_;
 };
+
+[[nodiscard]] Timeframe parse_timeframe(std::string_view value);
 
 } // namespace quantforge::market

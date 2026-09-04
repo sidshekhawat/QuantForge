@@ -23,6 +23,7 @@ add_library(quantforge-core
     cpp/src/market/validation_result.cpp
     cpp/src/market/bar_validator.cpp
     cpp/src/marketdata/market_data_request_validator.cpp
+    cpp/src/market/timeframe.cpp
 )
 
 target_include_directories(quantforge-core
@@ -62,6 +63,7 @@ add_executable(quantforge-tests
     cpp/tests/market/bar_validator_test.cpp
     cpp/tests/marketdata/market_data_request_test.cpp
     cpp/tests/marketdata/market_data_request_validator_test.cpp
+    cpp/tests/market/timeframe_test.cpp
 )
 
 target_link_libraries(quantforge-tests
