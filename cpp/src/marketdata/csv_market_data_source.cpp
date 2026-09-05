@@ -4,6 +4,9 @@
 #include "quantforge/market/timeframe.hpp"
 
 #include <charconv>
+#include <cctype>
+#include <chrono>
+#include <cstdint>
 #include <fstream>
 #include <stdexcept>
 #include <string>
@@ -88,6 +91,150 @@ market::Timeframe parse_csv_timeframe(
     }
 }
 
+int parse_fixed_digits(
+    std::string_view value,
+    std::size_t offset,
+    std::size_t count
+)
+{
+    int result = 0;
+
+    for (std::size_t i = 0; i < count; ++i) {
+        const char character = value[offset + i];
+
+        if (!std::isdigit(
+                static_cast<unsigned char>(character)
+            )) {
+            throw std::invalid_argument{"Expected decimal digit."};
+        }
+
+        result = result * 10 + (character - '0');
+    }
+
+    return result;
+}
+
+market::Timestamp parse_csv_timestamp(
+    std::string_view value,
+    std::size_t row_number
+)
+{
+    try {
+        if (
+            value.size() < 20
+            || value.back() != 'Z'
+        ) {
+            throw std::invalid_argument{"Invalid timestamp format."};
+        }
+
+        const int year_value = parse_fixed_digits(value, 0, 4);
+        const int month_value = parse_fixed_digits(value, 5, 2);
+        const int day_value = parse_fixed_digits(value, 8, 2);
+        const int hour = parse_fixed_digits(value, 11, 2);
+        const int minute = parse_fixed_digits(value, 14, 2);
+        const int second = parse_fixed_digits(value, 17, 2);
+
+        if (
+            value[4] != '-'
+            || value[7] != '-'
+            || value[10] != 'T'
+            || value[13] != ':'
+            || value[16] != ':'
+        ) {
+            throw std::invalid_argument{"Invalid timestamp format."};
+        }
+
+        if (
+            month_value < 1 || month_value > 12
+            || day_value < 1 || day_value > 31
+            || hour > 23
+            || minute > 59
+            || second > 59
+        ) {
+            throw std::invalid_argument{"Invalid timestamp value."};
+        }
+
+        std::int64_t nanoseconds = 0;
+
+        if (value.size() > 20) {
+            if (value[19] != '.') {
+                throw std::invalid_argument{
+                    "Invalid fractional second format."
+                };
+            }
+
+            const std::size_t fraction_length = value.size() - 21;
+
+            if (
+                fraction_length == 0
+                || fraction_length > 9
+            ) {
+                throw std::invalid_argument{
+                    "Invalid fractional second precision."
+                };
+            }
+
+            for (std::size_t i = 0; i < fraction_length; ++i) {
+                const char character = value[20 + i];
+
+                if (!std::isdigit(
+                        static_cast<unsigned char>(character)
+                    )) {
+                    throw std::invalid_argument{
+                        "Invalid fractional second."
+                    };
+                }
+
+                nanoseconds =
+                    nanoseconds * 10
+                    + (character - '0');
+            }
+
+            for (
+                std::size_t i = fraction_length;
+                i < 9;
+                ++i
+            ) {
+                nanoseconds *= 10;
+            }
+        }
+
+        const std::chrono::year_month_day calendar_date{
+            std::chrono::year{year_value},
+            std::chrono::month{
+                static_cast<unsigned>(month_value)
+            },
+            std::chrono::day{
+                static_cast<unsigned>(day_value)
+            }
+        };
+
+        if (!calendar_date.ok()) {
+            throw std::invalid_argument{
+                "Invalid calendar date."
+            };
+        }
+
+        const std::chrono::sys_days days{
+            calendar_date
+        };
+
+        return market::Timestamp{
+            days.time_since_epoch()
+            + std::chrono::hours{hour}
+            + std::chrono::minutes{minute}
+            + std::chrono::seconds{second}
+            + std::chrono::nanoseconds{nanoseconds}
+        };
+    }
+    catch (const std::exception&) {
+        throw MarketDataException{
+            row_number,
+            "Invalid timestamp: expected UTC ISO-8601 format."
+        };
+    }
+}
+
 } // namespace
 
 CsvMarketDataSource::CsvMarketDataSource(
@@ -143,12 +290,16 @@ std::vector<market::Bar> CsvMarketDataSource::get_bars(
             };
         }
 
+        const market::Timestamp timestamp =
+            parse_csv_timestamp(fields[0], row_number);
+
         const market::InstrumentId instrument_id =
             parse_instrument_id(fields[1], row_number);
 
         const market::Timeframe timeframe =
             parse_csv_timeframe(fields[2], row_number);
 
+        (void)timestamp;
         (void)instrument_id;
         (void)timeframe;
     }
@@ -156,4 +307,4 @@ std::vector<market::Bar> CsvMarketDataSource::get_bars(
     return {};
 }
 
-}
+} // namespace quantforge::marketdata

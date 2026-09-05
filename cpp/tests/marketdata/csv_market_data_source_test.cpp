@@ -15,6 +15,11 @@ namespace {
 constexpr const char* kValidHeader =
     "timestamp,instrument_id,timeframe,open,high,low,close,volume,price_scale,volume_scale";
 
+std::filesystem::path make_test_path(const char* filename)
+{
+    return std::filesystem::temp_directory_path() / filename;
+}
+
 const MarketDataRequest make_request()
 {
     return MarketDataRequest{
@@ -28,11 +33,6 @@ const MarketDataRequest make_request()
     };
 }
 
-std::filesystem::path make_test_path(const char* filename)
-{
-    return std::filesystem::temp_directory_path() / filename;
-}
-
 void write_csv(
     const std::filesystem::path& path,
     const char* row
@@ -43,6 +43,40 @@ void write_csv(
 
     file << kValidHeader << '\n';
     file << row << '\n';
+}
+
+void expect_timestamp_rejected(
+    const char* filename,
+    const char* timestamp
+)
+{
+    const std::filesystem::path path =
+        make_test_path(filename);
+
+    write_csv(
+        path,
+        (
+            std::string{timestamp}
+            + ",1,1m,250000,251050,249875,250825,125000,2,0"
+        ).c_str()
+    );
+
+    CsvMarketDataSource source{path};
+
+    try {
+        static_cast<void>(source.get_bars(make_request()));
+        FAIL() << "Expected MarketDataException.";
+    }
+    catch (const MarketDataException& exception) {
+        EXPECT_EQ(exception.row_number(), 2);
+        EXPECT_STREQ(
+            exception.what(),
+            "Market data error at row 2: "
+            "Invalid timestamp: expected UTC ISO-8601 format."
+        );
+    }
+
+    std::filesystem::remove(path);
 }
 
 } // namespace
@@ -76,14 +110,11 @@ TEST(CsvMarketDataSourceTest, ThrowsWhenFileCannotBeOpened)
             "Unable to open market data file: data/does_not_exist.csv"
         );
     }
-    catch (...) {
-        FAIL() << "Expected MarketDataException.";
-    }
 }
 
 TEST(CsvMarketDataSourceTest, AcceptsValidHeader)
 {
-    const std::filesystem::path path =
+    const auto path =
         make_test_path("quantforge_test_valid_header.csv");
 
     {
@@ -104,7 +135,7 @@ TEST(CsvMarketDataSourceTest, AcceptsValidHeader)
 
 TEST(CsvMarketDataSourceTest, RejectsMissingHeader)
 {
-    const std::filesystem::path path =
+    const auto path =
         make_test_path("quantforge_test_missing_header.csv");
 
     {
@@ -125,16 +156,13 @@ TEST(CsvMarketDataSourceTest, RejectsMissingHeader)
             "Market data error at row 1: Missing CSV header."
         );
     }
-    catch (...) {
-        FAIL() << "Expected MarketDataException.";
-    }
 
     std::filesystem::remove(path);
 }
 
 TEST(CsvMarketDataSourceTest, RejectsInvalidHeader)
 {
-    const std::filesystem::path path =
+    const auto path =
         make_test_path("quantforge_test_invalid_header.csv");
 
     {
@@ -157,16 +185,13 @@ TEST(CsvMarketDataSourceTest, RejectsInvalidHeader)
             "Market data error at row 1: Invalid CSV header."
         );
     }
-    catch (...) {
-        FAIL() << "Expected MarketDataException.";
-    }
 
     std::filesystem::remove(path);
 }
 
 TEST(CsvMarketDataSourceTest, RejectsReorderedHeader)
 {
-    const std::filesystem::path path =
+    const auto path =
         make_test_path("quantforge_test_reordered_header.csv");
 
     {
@@ -191,16 +216,13 @@ TEST(CsvMarketDataSourceTest, RejectsReorderedHeader)
             "Market data error at row 1: Invalid CSV header."
         );
     }
-    catch (...) {
-        FAIL() << "Expected MarketDataException.";
-    }
 
     std::filesystem::remove(path);
 }
 
 TEST(CsvMarketDataSourceTest, AcceptsValidInstrumentId)
 {
-    const std::filesystem::path path =
+    const auto path =
         make_test_path("quantforge_test_valid_instrument_id.csv");
 
     write_csv(
@@ -219,7 +241,7 @@ TEST(CsvMarketDataSourceTest, AcceptsValidInstrumentId)
 
 TEST(CsvMarketDataSourceTest, RejectsEmptyInstrumentId)
 {
-    const std::filesystem::path path =
+    const auto path =
         make_test_path("quantforge_test_empty_instrument_id.csv");
 
     write_csv(
@@ -247,7 +269,7 @@ TEST(CsvMarketDataSourceTest, RejectsEmptyInstrumentId)
 
 TEST(CsvMarketDataSourceTest, RejectsNonNumericInstrumentId)
 {
-    const std::filesystem::path path =
+    const auto path =
         make_test_path("quantforge_test_invalid_instrument_id.csv");
 
     write_csv(
@@ -275,7 +297,7 @@ TEST(CsvMarketDataSourceTest, RejectsNonNumericInstrumentId)
 
 TEST(CsvMarketDataSourceTest, RejectsDecimalInstrumentId)
 {
-    const std::filesystem::path path =
+    const auto path =
         make_test_path("quantforge_test_decimal_instrument_id.csv");
 
     write_csv(
@@ -303,7 +325,7 @@ TEST(CsvMarketDataSourceTest, RejectsDecimalInstrumentId)
 
 TEST(CsvMarketDataSourceTest, RejectsNegativeInstrumentId)
 {
-    const std::filesystem::path path =
+    const auto path =
         make_test_path("quantforge_test_negative_instrument_id.csv");
 
     write_csv(
@@ -331,7 +353,7 @@ TEST(CsvMarketDataSourceTest, RejectsNegativeInstrumentId)
 
 TEST(CsvMarketDataSourceTest, RejectsIncorrectFieldCount)
 {
-    const std::filesystem::path path =
+    const auto path =
         make_test_path("quantforge_test_invalid_field_count.csv");
 
     write_csv(
@@ -359,7 +381,7 @@ TEST(CsvMarketDataSourceTest, RejectsIncorrectFieldCount)
 
 TEST(CsvMarketDataSourceTest, AcceptsValidTimeframe)
 {
-    const std::filesystem::path path =
+    const auto path =
         make_test_path("quantforge_test_valid_timeframe.csv");
 
     write_csv(
@@ -378,7 +400,7 @@ TEST(CsvMarketDataSourceTest, AcceptsValidTimeframe)
 
 TEST(CsvMarketDataSourceTest, RejectsEmptyTimeframe)
 {
-    const std::filesystem::path path =
+    const auto path =
         make_test_path("quantforge_test_empty_timeframe.csv");
 
     write_csv(
@@ -406,7 +428,7 @@ TEST(CsvMarketDataSourceTest, RejectsEmptyTimeframe)
 
 TEST(CsvMarketDataSourceTest, RejectsInvalidTimeframe)
 {
-    const std::filesystem::path path =
+    const auto path =
         make_test_path("quantforge_test_invalid_timeframe.csv");
 
     write_csv(
@@ -434,7 +456,7 @@ TEST(CsvMarketDataSourceTest, RejectsInvalidTimeframe)
 
 TEST(CsvMarketDataSourceTest, RejectsZeroTimeframe)
 {
-    const std::filesystem::path path =
+    const auto path =
         make_test_path("quantforge_test_zero_timeframe.csv");
 
     write_csv(
@@ -462,7 +484,7 @@ TEST(CsvMarketDataSourceTest, RejectsZeroTimeframe)
 
 TEST(CsvMarketDataSourceTest, RejectsUppercaseTimeframe)
 {
-    const std::filesystem::path path =
+    const auto path =
         make_test_path("quantforge_test_uppercase_timeframe.csv");
 
     write_csv(
@@ -486,6 +508,103 @@ TEST(CsvMarketDataSourceTest, RejectsUppercaseTimeframe)
     }
 
     std::filesystem::remove(path);
+}
+
+TEST(CsvMarketDataSourceTest, AcceptsTimestampWithoutFraction)
+{
+    const auto path =
+        make_test_path("quantforge_test_timestamp_seconds.csv");
+
+    write_csv(
+        path,
+        "2026-01-02T09:15:00Z,1,1m,250000,251050,249875,250825,125000,2,0"
+    );
+
+    CsvMarketDataSource source{path};
+
+    EXPECT_NO_THROW(
+        static_cast<void>(source.get_bars(make_request()))
+    );
+
+    std::filesystem::remove(path);
+}
+
+TEST(CsvMarketDataSourceTest, AcceptsNanosecondTimestamp)
+{
+    const auto path =
+        make_test_path("quantforge_test_timestamp_nanoseconds.csv");
+
+    write_csv(
+        path,
+        "2026-01-02T09:15:00.123456789Z,1,1m,250000,251050,249875,250825,125000,2,0"
+    );
+
+    CsvMarketDataSource source{path};
+
+    EXPECT_NO_THROW(
+        static_cast<void>(source.get_bars(make_request()))
+    );
+
+    std::filesystem::remove(path);
+}
+
+TEST(CsvMarketDataSourceTest, AcceptsMidnightTimestamp)
+{
+    const auto path =
+        make_test_path("quantforge_test_timestamp_midnight.csv");
+
+    write_csv(
+        path,
+        "2026-01-02T00:00:00Z,1,1m,250000,251050,249875,250825,125000,2,0"
+    );
+
+    CsvMarketDataSource source{path};
+
+    EXPECT_NO_THROW(
+        static_cast<void>(source.get_bars(make_request()))
+    );
+
+    std::filesystem::remove(path);
+}
+
+TEST(CsvMarketDataSourceTest, RejectsTimestampWithoutZuluSuffix)
+{
+    expect_timestamp_rejected(
+        "quantforge_test_timestamp_no_z.csv",
+        "2026-01-02T09:15:00"
+    );
+}
+
+TEST(CsvMarketDataSourceTest, RejectsTimestampWithTimezoneOffset)
+{
+    expect_timestamp_rejected(
+        "quantforge_test_timestamp_offset.csv",
+        "2026-01-02T09:15:00+05:30"
+    );
+}
+
+TEST(CsvMarketDataSourceTest, RejectsInvalidCalendarDate)
+{
+    expect_timestamp_rejected(
+        "quantforge_test_timestamp_invalid_date.csv",
+        "2026-02-30T09:15:00Z"
+    );
+}
+
+TEST(CsvMarketDataSourceTest, RejectsInvalidTime)
+{
+    expect_timestamp_rejected(
+        "quantforge_test_timestamp_invalid_time.csv",
+        "2026-01-02T25:15:00Z"
+    );
+}
+
+TEST(CsvMarketDataSourceTest, RejectsTooManyFractionalDigits)
+{
+    expect_timestamp_rejected(
+        "quantforge_test_timestamp_too_precise.csv",
+        "2026-01-02T09:15:00.1234567890Z"
+    );
 }
 
 }
