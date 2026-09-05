@@ -235,6 +235,77 @@ market::Timestamp parse_csv_timestamp(
     }
 }
 
+std::uint8_t parse_price_scale(
+    std::string_view value,
+    std::size_t row_number
+)
+{
+    if (value.empty()) {
+        throw MarketDataException{
+            row_number,
+            "Invalid price_scale: value is empty."
+        };
+    }
+
+    std::uint32_t parsed_value{};
+
+    const auto [pointer, error] = std::from_chars(
+        value.data(),
+        value.data() + value.size(),
+        parsed_value
+    );
+
+    if (
+        error != std::errc{}
+        || pointer != value.data() + value.size()
+        || parsed_value > 255
+    ) {
+        throw MarketDataException{
+            row_number,
+            "Invalid price_scale: expected an integer from 0 to 255."
+        };
+    }
+
+    return static_cast<std::uint8_t>(parsed_value);
+}
+
+market::Price parse_price(
+    std::string_view value,
+    std::uint8_t scale,
+    std::size_t row_number
+)
+{
+    if (value.empty()) {
+        throw MarketDataException{
+            row_number,
+            "Invalid price: value is empty."
+        };
+    }
+
+    std::int64_t parsed_value{};
+
+    const auto [pointer, error] = std::from_chars(
+        value.data(),
+        value.data() + value.size(),
+        parsed_value
+    );
+
+    if (
+        error != std::errc{}
+        || pointer != value.data() + value.size()
+    ) {
+        throw MarketDataException{
+            row_number,
+            "Invalid price: expected a signed integer."
+        };
+    }
+
+    return market::Price{
+        parsed_value,
+        scale
+    };
+}
+
 } // namespace
 
 CsvMarketDataSource::CsvMarketDataSource(
@@ -299,12 +370,31 @@ std::vector<market::Bar> CsvMarketDataSource::get_bars(
         const market::Timeframe timeframe =
             parse_csv_timeframe(fields[2], row_number);
 
+        const std::uint8_t price_scale =
+            parse_price_scale(fields[8], row_number);
+
+        const market::Price open =
+            parse_price(fields[3], price_scale, row_number);
+
+        const market::Price high =
+            parse_price(fields[4], price_scale, row_number);
+
+        const market::Price low =
+            parse_price(fields[5], price_scale, row_number);
+
+        const market::Price close =
+            parse_price(fields[6], price_scale, row_number);
+
         (void)timestamp;
         (void)instrument_id;
         (void)timeframe;
+        (void)open;
+        (void)high;
+        (void)low;
+        (void)close;
     }
 
     return {};
 }
 
-} // namespace quantforge::marketdata
+}
