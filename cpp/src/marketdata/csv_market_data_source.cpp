@@ -3,9 +3,17 @@
 #include "quantforge/marketdata/market_data_exception.hpp"
 
 #include <fstream>
+#include <string>
 #include <utility>
 
 namespace quantforge::marketdata {
+
+namespace {
+
+constexpr std::string_view kExpectedHeader =
+    "timestamp,instrument_id,timeframe,open,high,low,close,volume,price_scale,volume_scale";
+
+} // namespace
 
 CsvMarketDataSource::CsvMarketDataSource(
     std::filesystem::path file_path
@@ -29,7 +37,23 @@ std::vector<market::Bar> CsvMarketDataSource::get_bars(
         };
     }
 
+    std::string header;
+
+    if (!std::getline(file, header)) {
+        throw MarketDataException{
+            1,
+            "Missing CSV header."
+        };
+    }
+
+    if (header != kExpectedHeader) {
+        throw MarketDataException{
+            1,
+            "Invalid CSV header."
+        };
+    }
+
     return {};
 }
 
-} // namespace quantforge::marketdata
+}
