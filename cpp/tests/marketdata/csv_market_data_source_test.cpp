@@ -15,6 +15,9 @@ namespace {
 constexpr const char* kValidHeader =
     "timestamp,instrument_id,timeframe,open,high,low,close,volume,price_scale,volume_scale";
 
+constexpr const char* kValidRow =
+    "2026-01-02T09:15:00Z,1,1m,250000,251050,249875,250825,125000,2,0";
+
 const MarketDataRequest make_request()
 {
     return MarketDataRequest{
@@ -31,6 +34,18 @@ const MarketDataRequest make_request()
 std::filesystem::path make_test_path(const char* filename)
 {
     return std::filesystem::temp_directory_path() / filename;
+}
+
+void write_csv(
+    const std::filesystem::path& path,
+    const char* row
+)
+{
+    std::ofstream file{path};
+    ASSERT_TRUE(file.is_open());
+
+    file << kValidHeader << '\n';
+    file << row << '\n';
 }
 
 } // namespace
@@ -186,4 +201,160 @@ TEST(CsvMarketDataSourceTest, RejectsReorderedHeader)
     std::filesystem::remove(path);
 }
 
-} // namespace quantforge::marketdata
+TEST(CsvMarketDataSourceTest, AcceptsValidInstrumentId)
+{
+    const std::filesystem::path path =
+        make_test_path("quantforge_test_valid_instrument_id.csv");
+
+    write_csv(path, kValidRow);
+
+    CsvMarketDataSource source{path};
+
+    EXPECT_NO_THROW(
+        static_cast<void>(source.get_bars(make_request()))
+    );
+
+    std::filesystem::remove(path);
+}
+
+TEST(CsvMarketDataSourceTest, RejectsEmptyInstrumentId)
+{
+    const std::filesystem::path path =
+        make_test_path("quantforge_test_empty_instrument_id.csv");
+
+    write_csv(
+        path,
+        "2026-01-02T09:15:00Z,,1m,250000,251050,249875,250825,125000,2,0"
+    );
+
+    CsvMarketDataSource source{path};
+
+    try {
+        static_cast<void>(source.get_bars(make_request()));
+        FAIL() << "Expected MarketDataException.";
+    }
+    catch (const MarketDataException& exception) {
+        EXPECT_EQ(exception.row_number(), 2);
+        EXPECT_STREQ(
+            exception.what(),
+            "Market data error at row 2: "
+            "Invalid instrument_id: value is empty."
+        );
+    }
+
+    std::filesystem::remove(path);
+}
+
+TEST(CsvMarketDataSourceTest, RejectsNonNumericInstrumentId)
+{
+    const std::filesystem::path path =
+        make_test_path("quantforge_test_invalid_instrument_id.csv");
+
+    write_csv(
+        path,
+        "2026-01-02T09:15:00Z,ABC,1m,250000,251050,249875,250825,125000,2,0"
+    );
+
+    CsvMarketDataSource source{path};
+
+    try {
+        static_cast<void>(source.get_bars(make_request()));
+        FAIL() << "Expected MarketDataException.";
+    }
+    catch (const MarketDataException& exception) {
+        EXPECT_EQ(exception.row_number(), 2);
+        EXPECT_STREQ(
+            exception.what(),
+            "Market data error at row 2: "
+            "Invalid instrument_id: expected an unsigned integer."
+        );
+    }
+
+    std::filesystem::remove(path);
+}
+
+TEST(CsvMarketDataSourceTest, RejectsDecimalInstrumentId)
+{
+    const std::filesystem::path path =
+        make_test_path("quantforge_test_decimal_instrument_id.csv");
+
+    write_csv(
+        path,
+        "2026-01-02T09:15:00Z,1.5,1m,250000,251050,249875,250825,125000,2,0"
+    );
+
+    CsvMarketDataSource source{path};
+
+    try {
+        static_cast<void>(source.get_bars(make_request()));
+        FAIL() << "Expected MarketDataException.";
+    }
+    catch (const MarketDataException& exception) {
+        EXPECT_EQ(exception.row_number(), 2);
+        EXPECT_STREQ(
+            exception.what(),
+            "Market data error at row 2: "
+            "Invalid instrument_id: expected an unsigned integer."
+        );
+    }
+
+    std::filesystem::remove(path);
+}
+
+TEST(CsvMarketDataSourceTest, RejectsNegativeInstrumentId)
+{
+    const std::filesystem::path path =
+        make_test_path("quantforge_test_negative_instrument_id.csv");
+
+    write_csv(
+        path,
+        "2026-01-02T09:15:00Z,-1,1m,250000,251050,249875,250825,125000,2,0"
+    );
+
+    CsvMarketDataSource source{path};
+
+    try {
+        static_cast<void>(source.get_bars(make_request()));
+        FAIL() << "Expected MarketDataException.";
+    }
+    catch (const MarketDataException& exception) {
+        EXPECT_EQ(exception.row_number(), 2);
+        EXPECT_STREQ(
+            exception.what(),
+            "Market data error at row 2: "
+            "Invalid instrument_id: expected an unsigned integer."
+        );
+    }
+
+    std::filesystem::remove(path);
+}
+
+TEST(CsvMarketDataSourceTest, RejectsIncorrectFieldCount)
+{
+    const std::filesystem::path path =
+        make_test_path("quantforge_test_invalid_field_count.csv");
+
+    write_csv(
+        path,
+        "2026-01-02T09:15:00Z,1,1m,250000"
+    );
+
+    CsvMarketDataSource source{path};
+
+    try {
+        static_cast<void>(source.get_bars(make_request()));
+        FAIL() << "Expected MarketDataException.";
+    }
+    catch (const MarketDataException& exception) {
+        EXPECT_EQ(exception.row_number(), 2);
+        EXPECT_STREQ(
+            exception.what(),
+            "Market data error at row 2: "
+            "Invalid CSV row: expected 10 fields."
+        );
+    }
+
+    std::filesystem::remove(path);
+}
+
+}
