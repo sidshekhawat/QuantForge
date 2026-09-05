@@ -1,9 +1,11 @@
 #include "quantforge/marketdata/csv_market_data_source.hpp"
 
 #include "quantforge/marketdata/market_data_exception.hpp"
+#include "quantforge/market/timeframe.hpp"
 
 #include <charconv>
 #include <fstream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -70,6 +72,22 @@ market::InstrumentId parse_instrument_id(
     return market::InstrumentId{parsed_value};
 }
 
+market::Timeframe parse_csv_timeframe(
+    std::string_view value,
+    std::size_t row_number
+)
+{
+    try {
+        return market::parse_timeframe(value);
+    }
+    catch (const std::invalid_argument&) {
+        throw MarketDataException{
+            row_number,
+            "Invalid timeframe: expected canonical format such as 1m or 1h."
+        };
+    }
+}
+
 } // namespace
 
 CsvMarketDataSource::CsvMarketDataSource(
@@ -128,7 +146,11 @@ std::vector<market::Bar> CsvMarketDataSource::get_bars(
         const market::InstrumentId instrument_id =
             parse_instrument_id(fields[1], row_number);
 
+        const market::Timeframe timeframe =
+            parse_csv_timeframe(fields[2], row_number);
+
         (void)instrument_id;
+        (void)timeframe;
     }
 
     return {};
