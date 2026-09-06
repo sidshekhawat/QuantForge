@@ -1114,7 +1114,29 @@ TEST(CsvMarketDataSourceTest, ConstructsBarFromCsvRow)
 
     CsvMarketDataSource source{path};
 
-    const auto bars = source.get_bars(make_request());
+    const auto bars = source.get_bars(
+        MarketDataRequest{
+            market::InstrumentId{42},
+            market::Timestamp{
+                std::chrono::sys_days{
+                    std::chrono::year{2026}
+                    / std::chrono::month{1}
+                    / std::chrono::day{2}
+                }
+            },
+            market::Timestamp{
+                std::chrono::sys_days{
+                    std::chrono::year{2026}
+                    / std::chrono::month{1}
+                    / std::chrono::day{3}
+                }
+            },
+            market::Timeframe{
+                5,
+                market::TimeframeUnit::Minute
+            }
+        }
+    );
 
     ASSERT_EQ(bars.size(), 1);
 
@@ -1170,6 +1192,177 @@ TEST(CsvMarketDataSourceTest, ConstructsBarFromCsvRow)
     EXPECT_EQ(
         bar.volume(),
         (market::Quantity{125000, 0})
+    );
+
+    std::filesystem::remove(path);
+}
+
+
+TEST(CsvMarketDataSourceTest, FiltersBarsByInstrumentId)
+{
+    const auto path =
+        make_test_path("quantforge_test_filter_instrument.csv");
+
+    write_csv(
+        path,
+        "2026-01-02T09:15:00Z,42,5m,250000,251050,249875,250825,125000,2,0\n"
+        "2026-01-02T09:20:00Z,99,5m,300000,301000,299000,300500,50000,2,0\n"
+        "2026-01-02T09:25:00Z,42,5m,251000,252000,250500,251500,100000,2,0"
+    );
+
+    CsvMarketDataSource source{path};
+
+    const auto bars = source.get_bars(
+        MarketDataRequest{
+            market::InstrumentId{42},
+            market::Timestamp{
+                std::chrono::sys_days{
+                    std::chrono::year{2026}
+                    / std::chrono::month{1}
+                    / std::chrono::day{2}
+                }
+            },
+            market::Timestamp{
+                std::chrono::sys_days{
+                    std::chrono::year{2026}
+                    / std::chrono::month{1}
+                    / std::chrono::day{3}
+                }
+            },
+            market::Timeframe{
+                5,
+                market::TimeframeUnit::Minute
+            }
+        }
+    );
+
+    ASSERT_EQ(bars.size(), 2);
+    EXPECT_EQ(bars[0].instrument_id(), market::InstrumentId{42});
+    EXPECT_EQ(bars[1].instrument_id(), market::InstrumentId{42});
+
+    std::filesystem::remove(path);
+}
+
+TEST(CsvMarketDataSourceTest, FiltersBarsByTimeframe)
+{
+    const auto path =
+        make_test_path("quantforge_test_filter_timeframe.csv");
+
+    write_csv(
+        path,
+        "2026-01-02T09:15:00Z,42,5m,250000,251050,249875,250825,125000,2,0\n"
+        "2026-01-02T09:20:00Z,42,1m,251000,251500,250500,251250,100000,2,0\n"
+        "2026-01-02T09:25:00Z,42,5m,252000,253000,251500,252500,110000,2,0"
+    );
+
+    CsvMarketDataSource source{path};
+
+    const auto bars = source.get_bars(
+        MarketDataRequest{
+            market::InstrumentId{42},
+            market::Timestamp{
+                std::chrono::sys_days{
+                    std::chrono::year{2026}
+                    / std::chrono::month{1}
+                    / std::chrono::day{2}
+                }
+            },
+            market::Timestamp{
+                std::chrono::sys_days{
+                    std::chrono::year{2026}
+                    / std::chrono::month{1}
+                    / std::chrono::day{3}
+                }
+            },
+            market::Timeframe{
+                5,
+                market::TimeframeUnit::Minute
+            }
+        }
+    );
+
+    ASSERT_EQ(bars.size(), 2);
+    EXPECT_EQ(
+        bars[0].timeframe(),
+        (market::Timeframe{5, market::TimeframeUnit::Minute})
+    );
+    EXPECT_EQ(
+        bars[1].timeframe(),
+        (market::Timeframe{5, market::TimeframeUnit::Minute})
+    );
+
+    std::filesystem::remove(path);
+}
+
+TEST(CsvMarketDataSourceTest, FiltersBarsByExclusiveTimeRange)
+{
+    const auto path =
+        make_test_path("quantforge_test_filter_time.csv");
+
+    write_csv(
+        path,
+        "2026-01-02T09:00:00Z,42,5m,249000,250000,248500,249500,100000,2,0\n"
+        "2026-01-02T09:15:00Z,42,5m,250000,251050,249875,250825,125000,2,0\n"
+        "2026-01-02T09:30:00Z,42,5m,251000,252000,250500,251500,100000,2,0\n"
+        "2026-01-02T09:45:00Z,42,5m,252000,253000,251500,252500,90000,2,0"
+    );
+
+    CsvMarketDataSource source{path};
+
+    const auto bars = source.get_bars(
+        MarketDataRequest{
+            market::InstrumentId{42},
+            market::Timestamp{
+                std::chrono::sys_days{
+                    std::chrono::year{2026}
+                    / std::chrono::month{1}
+                    / std::chrono::day{2}
+                }
+                + std::chrono::hours{9}
+                + std::chrono::minutes{15}
+            },
+            market::Timestamp{
+                std::chrono::sys_days{
+                    std::chrono::year{2026}
+                    / std::chrono::month{1}
+                    / std::chrono::day{2}
+                }
+                + std::chrono::hours{9}
+                + std::chrono::minutes{45}
+            },
+            market::Timeframe{
+                5,
+                market::TimeframeUnit::Minute
+            }
+        }
+    );
+
+    ASSERT_EQ(bars.size(), 2);
+
+    EXPECT_EQ(
+        bars[0].timestamp(),
+        market::Timestamp{
+            std::chrono::sys_days{
+                std::chrono::year{2026}
+                / std::chrono::month{1}
+                / std::chrono::day{2}
+            }
+            + std::chrono::hours{9}
+            + std::chrono::minutes{15}
+        }
+    );
+
+    EXPECT_EQ(
+        bars[1].timestamp(),
+        market::Timestamp{
+            std::chrono::sys_days{
+                std::chrono::year{2026}
+                / std::chrono::month{1}
+                / std::chrono::day{2}
+            }
+            + std::chrono::hours{9}
+            + std::chrono::minutes{30}
+        }
     );
 
     std::filesystem::remove(path);
