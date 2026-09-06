@@ -854,3 +854,251 @@ TEST(CsvMarketDataSourceTest, AcceptsMaximumPriceScale)
 
 
 }
+
+namespace quantforge::marketdata {
+
+TEST(CsvMarketDataSourceTest, AcceptsValidVolume)
+{
+    const auto path =
+        make_test_path("quantforge_test_valid_volume.csv");
+
+    write_csv(
+        path,
+        "2026-01-02T09:15:00Z,1,1m,250000,251050,249875,250825,125000,2,0"
+    );
+
+    CsvMarketDataSource source{path};
+
+    EXPECT_NO_THROW(
+        static_cast<void>(source.get_bars(make_request()))
+    );
+
+    std::filesystem::remove(path);
+}
+
+TEST(CsvMarketDataSourceTest, AcceptsZeroVolume)
+{
+    const auto path =
+        make_test_path("quantforge_test_zero_volume.csv");
+
+    write_csv(
+        path,
+        "2026-01-02T09:15:00Z,1,1m,250000,251050,249875,250825,0,2,0"
+    );
+
+    CsvMarketDataSource source{path};
+
+    EXPECT_NO_THROW(
+        static_cast<void>(source.get_bars(make_request()))
+    );
+
+    std::filesystem::remove(path);
+}
+
+TEST(CsvMarketDataSourceTest, AcceptsNegativeRawVolume)
+{
+    const auto path =
+        make_test_path("quantforge_test_negative_volume.csv");
+
+    write_csv(
+        path,
+        "2026-01-02T09:15:00Z,1,1m,250000,251050,249875,250825,-125000,2,0"
+    );
+
+    CsvMarketDataSource source{path};
+
+    EXPECT_NO_THROW(
+        static_cast<void>(source.get_bars(make_request()))
+    );
+
+    std::filesystem::remove(path);
+}
+
+TEST(CsvMarketDataSourceTest, RejectsEmptyVolume)
+{
+    const auto path =
+        make_test_path("quantforge_test_empty_volume.csv");
+
+    write_csv(
+        path,
+        "2026-01-02T09:15:00Z,1,1m,250000,251050,249875,250825,,2,0"
+    );
+
+    CsvMarketDataSource source{path};
+
+    try {
+        static_cast<void>(source.get_bars(make_request()));
+        FAIL() << "Expected MarketDataException.";
+    }
+    catch (const MarketDataException& exception) {
+        EXPECT_EQ(exception.row_number(), 2);
+        EXPECT_STREQ(
+            exception.what(),
+            "Market data error at row 2: "
+            "Invalid volume: value is empty."
+        );
+    }
+
+    std::filesystem::remove(path);
+}
+
+TEST(CsvMarketDataSourceTest, RejectsNonNumericVolume)
+{
+    const auto path =
+        make_test_path("quantforge_test_invalid_volume.csv");
+
+    write_csv(
+        path,
+        "2026-01-02T09:15:00Z,1,1m,250000,251050,249875,250825,ABC,2,0"
+    );
+
+    CsvMarketDataSource source{path};
+
+    try {
+        static_cast<void>(source.get_bars(make_request()));
+        FAIL() << "Expected MarketDataException.";
+    }
+    catch (const MarketDataException& exception) {
+        EXPECT_EQ(exception.row_number(), 2);
+        EXPECT_STREQ(
+            exception.what(),
+            "Market data error at row 2: "
+            "Invalid volume: expected a signed integer."
+        );
+    }
+
+    std::filesystem::remove(path);
+}
+
+TEST(CsvMarketDataSourceTest, RejectsDecimalVolume)
+{
+    const auto path =
+        make_test_path("quantforge_test_decimal_volume.csv");
+
+    write_csv(
+        path,
+        "2026-01-02T09:15:00Z,1,1m,250000,251050,249875,250825,1250.50,2,0"
+    );
+
+    CsvMarketDataSource source{path};
+
+    try {
+        static_cast<void>(source.get_bars(make_request()));
+        FAIL() << "Expected MarketDataException.";
+    }
+    catch (const MarketDataException& exception) {
+        EXPECT_EQ(exception.row_number(), 2);
+        EXPECT_STREQ(
+            exception.what(),
+            "Market data error at row 2: "
+            "Invalid volume: expected a signed integer."
+        );
+    }
+
+    std::filesystem::remove(path);
+}
+
+TEST(CsvMarketDataSourceTest, RejectsEmptyVolumeScale)
+{
+    const auto path =
+        make_test_path("quantforge_test_empty_volume_scale.csv");
+
+    write_csv(
+        path,
+        "2026-01-02T09:15:00Z,1,1m,250000,251050,249875,250825,125000,2,"
+    );
+
+    CsvMarketDataSource source{path};
+
+    try {
+        static_cast<void>(source.get_bars(make_request()));
+        FAIL() << "Expected MarketDataException.";
+    }
+    catch (const MarketDataException& exception) {
+        EXPECT_EQ(exception.row_number(), 2);
+        EXPECT_STREQ(
+            exception.what(),
+            "Market data error at row 2: "
+            "Invalid volume_scale: value is empty."
+        );
+    }
+
+    std::filesystem::remove(path);
+}
+
+TEST(CsvMarketDataSourceTest, RejectsNonNumericVolumeScale)
+{
+    const auto path =
+        make_test_path("quantforge_test_invalid_volume_scale.csv");
+
+    write_csv(
+        path,
+        "2026-01-02T09:15:00Z,1,1m,250000,251050,249875,250825,125000,2,ABC"
+    );
+
+    CsvMarketDataSource source{path};
+
+    try {
+        static_cast<void>(source.get_bars(make_request()));
+        FAIL() << "Expected MarketDataException.";
+    }
+    catch (const MarketDataException& exception) {
+        EXPECT_EQ(exception.row_number(), 2);
+        EXPECT_STREQ(
+            exception.what(),
+            "Market data error at row 2: "
+            "Invalid volume_scale: expected an integer from 0 to 255."
+        );
+    }
+
+    std::filesystem::remove(path);
+}
+
+TEST(CsvMarketDataSourceTest, RejectsVolumeScaleAboveUint8Range)
+{
+    const auto path =
+        make_test_path("quantforge_test_large_volume_scale.csv");
+
+    write_csv(
+        path,
+        "2026-01-02T09:15:00Z,1,1m,250000,251050,249875,250825,125000,2,256"
+    );
+
+    CsvMarketDataSource source{path};
+
+    try {
+        static_cast<void>(source.get_bars(make_request()));
+        FAIL() << "Expected MarketDataException.";
+    }
+    catch (const MarketDataException& exception) {
+        EXPECT_EQ(exception.row_number(), 2);
+        EXPECT_STREQ(
+            exception.what(),
+            "Market data error at row 2: "
+            "Invalid volume_scale: expected an integer from 0 to 255."
+        );
+    }
+
+    std::filesystem::remove(path);
+}
+
+TEST(CsvMarketDataSourceTest, AcceptsMaximumVolumeScale)
+{
+    const auto path =
+        make_test_path("quantforge_test_max_volume_scale.csv");
+
+    write_csv(
+        path,
+        "2026-01-02T09:15:00Z,1,1m,250000,251050,249875,250825,125000,2,255"
+    );
+
+    CsvMarketDataSource source{path};
+
+    EXPECT_NO_THROW(
+        static_cast<void>(source.get_bars(make_request()))
+    );
+
+    std::filesystem::remove(path);
+}
+
+} // namespace quantforge::marketdata

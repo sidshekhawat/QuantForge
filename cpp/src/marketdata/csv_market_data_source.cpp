@@ -269,6 +269,77 @@ std::uint8_t parse_price_scale(
     return static_cast<std::uint8_t>(parsed_value);
 }
 
+std::uint8_t parse_volume_scale(
+    std::string_view value,
+    std::size_t row_number
+)
+{
+    if (value.empty()) {
+        throw MarketDataException{
+            row_number,
+            "Invalid volume_scale: value is empty."
+        };
+    }
+
+    std::uint32_t parsed_value{};
+
+    const auto [pointer, error] = std::from_chars(
+        value.data(),
+        value.data() + value.size(),
+        parsed_value
+    );
+
+    if (
+        error != std::errc{}
+        || pointer != value.data() + value.size()
+        || parsed_value > 255
+    ) {
+        throw MarketDataException{
+            row_number,
+            "Invalid volume_scale: expected an integer from 0 to 255."
+        };
+    }
+
+    return static_cast<std::uint8_t>(parsed_value);
+}
+
+market::Quantity parse_volume(
+    std::string_view value,
+    std::uint8_t scale,
+    std::size_t row_number
+)
+{
+    if (value.empty()) {
+        throw MarketDataException{
+            row_number,
+            "Invalid volume: value is empty."
+        };
+    }
+
+    std::int64_t parsed_value{};
+
+    const auto [pointer, error] = std::from_chars(
+        value.data(),
+        value.data() + value.size(),
+        parsed_value
+    );
+
+    if (
+        error != std::errc{}
+        || pointer != value.data() + value.size()
+    ) {
+        throw MarketDataException{
+            row_number,
+            "Invalid volume: expected a signed integer."
+        };
+    }
+
+    return market::Quantity{
+        parsed_value,
+        scale
+    };
+}
+
 market::Price parse_price(
     std::string_view value,
     std::uint8_t scale,
@@ -385,6 +456,12 @@ std::vector<market::Bar> CsvMarketDataSource::get_bars(
         const market::Price close =
             parse_price(fields[6], price_scale, row_number);
 
+        const std::uint8_t volume_scale =
+            parse_volume_scale(fields[9], row_number);
+
+        const market::Quantity volume =
+            parse_volume(fields[7], volume_scale, row_number);
+
         (void)timestamp;
         (void)instrument_id;
         (void)timeframe;
@@ -392,6 +469,7 @@ std::vector<market::Bar> CsvMarketDataSource::get_bars(
         (void)high;
         (void)low;
         (void)close;
+        (void)volume;
     }
 
     return {};
