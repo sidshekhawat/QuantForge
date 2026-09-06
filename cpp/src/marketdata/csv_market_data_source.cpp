@@ -417,6 +417,8 @@ std::vector<market::Bar> CsvMarketDataSource::get_bars(
         };
     }
 
+    std::vector<market::Bar> bars;
+
     std::string line;
     std::size_t row_number = 1;
 
@@ -462,17 +464,19 @@ std::vector<market::Bar> CsvMarketDataSource::get_bars(
         const market::Quantity volume =
             parse_volume(fields[7], volume_scale, row_number);
 
-        (void)timestamp;
-        (void)instrument_id;
-        (void)timeframe;
-        (void)open;
-        (void)high;
-        (void)low;
-        (void)close;
-        (void)volume;
+        bars.emplace_back(
+            instrument_id,
+            timestamp,
+            timeframe,
+            open,
+            high,
+            low,
+            close,
+            volume
+        );
     }
 
-    return {};
+    return bars;
 }
 
 }

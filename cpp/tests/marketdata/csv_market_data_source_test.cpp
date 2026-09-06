@@ -1101,4 +1101,78 @@ TEST(CsvMarketDataSourceTest, AcceptsMaximumVolumeScale)
     std::filesystem::remove(path);
 }
 
+
+TEST(CsvMarketDataSourceTest, ConstructsBarFromCsvRow)
+{
+    const auto path =
+        make_test_path("quantforge_test_constructs_bar.csv");
+
+    write_csv(
+        path,
+        "2026-01-02T09:15:00.123456789Z,42,5m,250000,251050,249875,250825,125000,2,0"
+    );
+
+    CsvMarketDataSource source{path};
+
+    const auto bars = source.get_bars(make_request());
+
+    ASSERT_EQ(bars.size(), 1);
+
+    const auto& bar = bars.front();
+
+    EXPECT_EQ(
+        bar.instrument_id(),
+        market::InstrumentId{42}
+    );
+
+    EXPECT_EQ(
+        bar.timestamp(),
+        market::Timestamp{
+            std::chrono::sys_days{
+                std::chrono::year{2026}
+                / std::chrono::month{1}
+                / std::chrono::day{2}
+            }
+            + std::chrono::hours{9}
+            + std::chrono::minutes{15}
+            + std::chrono::nanoseconds{123456789}
+        }
+    );
+
+    EXPECT_EQ(
+        bar.timeframe(),
+        (market::Timeframe{
+            5,
+            market::TimeframeUnit::Minute
+        })
+    );
+
+    EXPECT_EQ(
+        bar.open(),
+        (market::Price{250000, 2})
+    );
+
+    EXPECT_EQ(
+        bar.high(),
+        (market::Price{251050, 2})
+    );
+
+    EXPECT_EQ(
+        bar.low(),
+        (market::Price{249875, 2})
+    );
+
+    EXPECT_EQ(
+        bar.close(),
+        (market::Price{250825, 2})
+    );
+
+    EXPECT_EQ(
+        bar.volume(),
+        (market::Quantity{125000, 0})
+    );
+
+    std::filesystem::remove(path);
+}
+
 } // namespace quantforge::marketdata
