@@ -24,6 +24,7 @@ add_library(quantforge-core
     cpp/src/market/bar_validator.cpp
     cpp/src/marketdata/market_data_request_validator.cpp
     cpp/src/market/timeframe.cpp
+    cpp/src/marketdata/csv_bar_parser.cpp
     cpp/src/marketdata/csv_market_data_source.cpp
 )
 
@@ -67,6 +68,7 @@ add_executable(quantforge-tests
     cpp/tests/market/timeframe_test.cpp
     cpp/tests/marketdata/market_data_exception_test.cpp
     cpp/tests/marketdata/csv_market_data_source_test.cpp
+    cpp/tests/marketdata/csv_bar_parser_test.cpp
 )
 
 target_link_libraries(quantforge-tests
