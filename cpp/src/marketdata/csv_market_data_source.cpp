@@ -2,6 +2,7 @@
 
 #include "quantforge/marketdata/csv_bar_parser.hpp"
 #include "quantforge/marketdata/market_data_exception.hpp"
+#include "quantforge/marketdata/market_data_request_validator.hpp"
 #include "quantforge/market/bar_validator.hpp"
 
 #include <fstream>
@@ -30,6 +31,17 @@ std::vector<market::Bar> CsvMarketDataSource::get_bars(
     const MarketDataRequest& request
 )
 {
+    const market::ValidationResult request_validation =
+        MarketDataRequestValidator::validate(request);
+
+    if (!request_validation.valid()) {
+        throw MarketDataException{
+            0,
+            "Invalid market data request: "
+            + request_validation.message()
+        };
+    }
+
     std::ifstream file{file_path_};
 
     if (!file.is_open()) {

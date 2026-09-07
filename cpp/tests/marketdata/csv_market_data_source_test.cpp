@@ -1632,4 +1632,95 @@ TEST(CsvMarketDataSourceTest, RejectsNegativeVolume)
     std::filesystem::remove(path);
 }
 
+TEST(CsvMarketDataSourceTest, RejectsRequestWithStartAfterEnd)
+{
+    const auto path =
+        make_test_path("quantforge_test_invalid_request_order.csv");
+
+    write_csv(
+        path,
+        "1970-01-01T00:00:00Z,1,1h,250000,251000,249000,250500,125000,2,0"
+    );
+
+    CsvMarketDataSource source{path};
+
+    const auto start =
+        market::Timestamp{
+            std::chrono::sys_days{
+                std::chrono::year{1970}
+                / std::chrono::month{1}
+                / std::chrono::day{2}
+            }
+        };
+
+    const auto end =
+        market::Timestamp{
+            std::chrono::sys_days{
+                std::chrono::year{1970}
+                / std::chrono::month{1}
+                / std::chrono::day{1}
+            }
+        };
+
+    EXPECT_THROW(
+        static_cast<void>(
+            source.get_bars(
+                MarketDataRequest{
+                    market::InstrumentId{1},
+                    start,
+                    end,
+                    market::Timeframe{
+                        1,
+                        market::TimeframeUnit::Hour
+                    }
+                }
+            )
+        ),
+        MarketDataException
+    );
+
+    std::filesystem::remove(path);
+}
+
+TEST(CsvMarketDataSourceTest, RejectsZeroValueRequestTimeframe)
+{
+    const auto path =
+        make_test_path("quantforge_test_zero_request_timeframe.csv");
+
+    write_csv(
+        path,
+        "1970-01-01T00:00:00Z,1,1h,250000,251000,249000,250500,125000,2,0"
+    );
+
+    CsvMarketDataSource source{path};
+
+    const auto start =
+        market::Timestamp{
+            std::chrono::sys_days{
+                std::chrono::year{1970}
+                / std::chrono::month{1}
+                / std::chrono::day{1}
+            }
+        };
+
+    EXPECT_THROW(
+        static_cast<void>(
+            source.get_bars(
+                MarketDataRequest{
+                    market::InstrumentId{1},
+                    start,
+                    start + std::chrono::hours{1},
+                    market::Timeframe{
+                        0,
+                        market::TimeframeUnit::Hour
+                    }
+                }
+            )
+        ),
+        MarketDataException
+    );
+
+    std::filesystem::remove(path);
+}
+
 } // namespace quantforge::marketdata
