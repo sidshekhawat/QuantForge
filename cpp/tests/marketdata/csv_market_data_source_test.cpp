@@ -634,7 +634,7 @@ TEST(CsvMarketDataSourceTest, AcceptsNegativeRawPrice)
 
     write_csv(
         path,
-        "2026-01-02T09:15:00Z,1,1m,-250000,251050,249875,250825,125000,2,0"
+        "2026-01-02T09:15:00Z,1,1m,-250000,-249000,-251000,-249500,125000,2,0"
     );
 
     CsvMarketDataSource source{path};
@@ -653,7 +653,7 @@ TEST(CsvMarketDataSourceTest, AcceptsZeroPrice)
 
     write_csv(
         path,
-        "2026-01-02T09:15:00Z,1,1m,0,251050,249875,250825,125000,2,0"
+        "2026-01-02T09:15:00Z,1,1m,0,251050,0,250000,125000,2,0"
     );
 
     CsvMarketDataSource source{path};
@@ -895,7 +895,7 @@ TEST(CsvMarketDataSourceTest, AcceptsZeroVolume)
     std::filesystem::remove(path);
 }
 
-TEST(CsvMarketDataSourceTest, AcceptsNegativeRawVolume)
+TEST(CsvMarketDataSourceTest, RejectsNegativeRawVolume)
 {
     const auto path =
         make_test_path("quantforge_test_negative_volume.csv");
@@ -907,8 +907,9 @@ TEST(CsvMarketDataSourceTest, AcceptsNegativeRawVolume)
 
     CsvMarketDataSource source{path};
 
-    EXPECT_NO_THROW(
-        static_cast<void>(source.get_bars(make_request()))
+    EXPECT_THROW(
+        static_cast<void>(source.get_bars(make_request())),
+        MarketDataException
     );
 
     std::filesystem::remove(path);
@@ -1567,6 +1568,66 @@ TEST(CsvMarketDataSourceTest, ReturnsEmptyResultWhenNoBarsMatch)
     );
 
     EXPECT_TRUE(bars.empty());
+
+    std::filesystem::remove(path);
+}
+
+TEST(CsvMarketDataSourceTest, RejectsBarWithHighBelowOpen)
+{
+    const auto path =
+        make_test_path("quantforge_test_invalid_high.csv");
+
+    write_csv(
+        path,
+        "1970-01-01T00:00:00Z,1,1h,250000,249000,249000,250000,125000,2,0"
+    );
+
+    CsvMarketDataSource source{path};
+
+    EXPECT_THROW(
+        static_cast<void>(source.get_bars(make_request())),
+        MarketDataException
+    );
+
+    std::filesystem::remove(path);
+}
+
+TEST(CsvMarketDataSourceTest, RejectsBarWithLowAboveClose)
+{
+    const auto path =
+        make_test_path("quantforge_test_invalid_low.csv");
+
+    write_csv(
+        path,
+        "1970-01-01T00:00:00Z,1,1h,250000,251000,251500,250500,125000,2,0"
+    );
+
+    CsvMarketDataSource source{path};
+
+    EXPECT_THROW(
+        static_cast<void>(source.get_bars(make_request())),
+        MarketDataException
+    );
+
+    std::filesystem::remove(path);
+}
+
+TEST(CsvMarketDataSourceTest, RejectsNegativeVolume)
+{
+    const auto path =
+        make_test_path("quantforge_test_negative_volume.csv");
+
+    write_csv(
+        path,
+        "1970-01-01T00:00:00Z,1,1h,250000,251000,249000,250500,-1,2,0"
+    );
+
+    CsvMarketDataSource source{path};
+
+    EXPECT_THROW(
+        static_cast<void>(source.get_bars(make_request())),
+        MarketDataException
+    );
 
     std::filesystem::remove(path);
 }
