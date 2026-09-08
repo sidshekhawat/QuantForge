@@ -27,6 +27,7 @@ cpp/src/market/bar_continuity_validator.cpp
     cpp/src/market/timeframe.cpp
     cpp/src/marketdata/csv_bar_parser.cpp
     cpp/src/marketdata/csv_market_data_source.cpp
+cpp/src/marketdata/market_data_pipeline.cpp
 )
 
 target_include_directories(quantforge-core
@@ -70,6 +71,7 @@ cpp/tests/market/bar_continuity_validator_test.cpp
     cpp/tests/market/timeframe_test.cpp
     cpp/tests/marketdata/market_data_exception_test.cpp
     cpp/tests/marketdata/csv_market_data_source_test.cpp
+cpp/tests/marketdata/market_data_pipeline_test.cpp
     cpp/tests/marketdata/csv_bar_parser_test.cpp
 )
 
