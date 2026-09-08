@@ -1370,6 +1370,62 @@ TEST(CsvMarketDataSourceTest, FiltersBarsByExclusiveTimeRange)
 }
 
 
+TEST(CsvMarketDataSourceTest, RejectsDuplicateBarIdentity)
+{
+    const auto path =
+        make_test_path("quantforge_test_duplicate_bar.csv");
+
+    write_csv(
+        path,
+        "2026-01-02T09:15:00Z,42,5m,250000,251000,249500,250500,100000,2,0"
+    );
+
+    {
+        std::ofstream file{path, std::ios::app};
+        ASSERT_TRUE(file.is_open());
+
+        file
+            << "2026-01-02T09:15:00Z,42,5m,"
+               "250500,252000,250000,251500,120000,2,0"
+            << '\n';
+    }
+
+    CsvMarketDataSource source{path};
+
+    EXPECT_THROW(
+        static_cast<void>(source.get_bars(
+            MarketDataRequest{
+                market::InstrumentId{42},
+                market::Timestamp{
+                    std::chrono::sys_days{
+                        std::chrono::year{2026}
+                        / std::chrono::month{1}
+                        / std::chrono::day{2}
+                    }
+                    + std::chrono::hours{9}
+                    + std::chrono::minutes{15}
+                },
+                market::Timestamp{
+                    std::chrono::sys_days{
+                        std::chrono::year{2026}
+                        / std::chrono::month{1}
+                        / std::chrono::day{2}
+                    }
+                    + std::chrono::hours{9}
+                    + std::chrono::minutes{20}
+                },
+                market::Timeframe{
+                    5,
+                    market::TimeframeUnit::Minute
+                }
+            }
+        )),
+        MarketDataException
+    );
+
+    std::filesystem::remove(path);
+}
+
 TEST(CsvMarketDataSourceTest, PreservesCsvRowOrder)
 {
     const auto path =

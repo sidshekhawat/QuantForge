@@ -8,6 +8,7 @@
 #include <fstream>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -17,6 +18,56 @@ namespace {
 
 constexpr std::string_view kExpectedHeader =
     "timestamp,instrument_id,timeframe,open,high,low,close,volume,price_scale,volume_scale";
+
+struct BarIdentity {
+    market::InstrumentId instrument_id;
+    market::Timestamp timestamp;
+    market::Timeframe timeframe;
+
+    bool operator==(const BarIdentity&) const = default;
+};
+
+struct BarIdentityHash {
+    std::size_t operator()(const BarIdentity& identity) const noexcept
+    {
+        const std::size_t instrument_hash =
+            std::hash<std::uint64_t>{}(identity.instrument_id.value());
+
+        const std::size_t timestamp_hash =
+            std::hash<std::int64_t>{}(
+                identity.timestamp.time_since_epoch().count()
+            );
+
+        const std::size_t timeframe_value_hash =
+            std::hash<std::uint32_t>{}(identity.timeframe.value());
+
+        const std::size_t timeframe_unit_hash =
+            std::hash<std::uint8_t>{}(
+                static_cast<std::uint8_t>(
+                    identity.timeframe.unit()
+                )
+            );
+
+        std::size_t seed = instrument_hash;
+
+        seed ^= timestamp_hash
+            + static_cast<std::size_t>(0x9e3779b9)
+            + (seed << 6)
+            + (seed >> 2);
+
+        seed ^= timeframe_value_hash
+            + static_cast<std::size_t>(0x9e3779b9)
+            + (seed << 6)
+            + (seed >> 2);
+
+        seed ^= timeframe_unit_hash
+            + static_cast<std::size_t>(0x9e3779b9)
+            + (seed << 6)
+            + (seed >> 2);
+
+        return seed;
+    }
+};
 
 } // namespace
 
@@ -68,6 +119,7 @@ std::vector<market::Bar> CsvMarketDataSource::get_bars(
     }
 
     std::vector<market::Bar> bars;
+    std::unordered_set<BarIdentity, BarIdentityHash> seen_bars;
 
     std::string line;
     std::size_t row_number = 1;
@@ -85,6 +137,19 @@ std::vector<market::Bar> CsvMarketDataSource::get_bars(
             throw MarketDataException{
                 row_number,
                 "Invalid bar: " + validation.message()
+            };
+        }
+
+        const BarIdentity identity{
+            bar.instrument_id(),
+            bar.timestamp(),
+            bar.timeframe()
+        };
+
+        if (!seen_bars.insert(identity).second) {
+            throw MarketDataException{
+                row_number,
+                "Duplicate bar identity."
             };
         }
 
