@@ -16,6 +16,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # QuantForge Core Library
 add_library(quantforge-core
 
+   cpp/src/backtest/backtest_engine.cpp
+
    cpp/src/backtest/backtest_clock.cpp
 
     cpp/src/core/event.cpp
@@ -56,6 +58,8 @@ enable_testing()
 find_package(GTest REQUIRED)
 
 add_executable(quantforge-tests
+
+   cpp/tests/backtest/backtest_engine_test.cpp
 
    cpp/tests/backtest/backtest_clock_test.cpp
 
