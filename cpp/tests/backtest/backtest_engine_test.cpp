@@ -2,237 +2,10 @@
 
 #include <chrono>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include <gtest/gtest.h>
-
-namespace {
-
-using quantforge::backtest::BacktestClock;
-using quantforge::backtest::BacktestEngine;
-using quantforge::market::Bar;
-using quantforge::market::InstrumentId;
-using quantforge::market::Price;
-using quantforge::market::Quantity;
-using quantforge::market::Timeframe;
-using quantforge::market::TimeframeUnit;
-using quantforge::market::Timestamp;
-
-Bar make_bar(
-    std::int64_t timestamp_seconds,
-    std::int64_t close)
-{
-    const auto timestamp =
-        Timestamp{
-            std::chrono::seconds{timestamp_seconds}
-        };
-
-    const Price open{close, 0};
-    const Price high{close, 0};
-    const Price low{close, 0};
-
-    return Bar{
-        InstrumentId{1},
-        timestamp,
-        Timeframe{1, TimeframeUnit::Minute},
-        open,
-        high,
-        low,
-        Price{close, 0},
-        Quantity{100, 0}
-    };
-}
-
-TEST(BacktestEngineTest, AdvancesClockBeforeHandlerRuns)
-{
-    const auto start_time =
-        Timestamp{
-            std::chrono::seconds{100}
-        };
-
-    const auto bar =
-        make_bar(160, 250);
-
-    BacktestClock clock{start_time};
-    BacktestEngine engine{clock};
-
-    Timestamp observed_time{};
-
-    engine.run(
-        std::vector<Bar>{bar},
-        [&](const Bar&) {
-            observed_time = clock.now();
-        }
-    );
-
-    EXPECT_EQ(observed_time, bar.timestamp());
-    EXPECT_EQ(clock.now(), bar.timestamp());
-}
-
-TEST(BacktestEngineTest, ProcessesBarsInProvidedOrder)
-{
-    const auto start_time =
-        Timestamp{
-            std::chrono::seconds{100}
-        };
-
-    const auto first_bar = make_bar(160, 250);
-    const auto second_bar = make_bar(220, 255);
-    const auto third_bar = make_bar(280, 260);
-
-    BacktestClock clock{start_time};
-    BacktestEngine engine{clock};
-
-    std::vector<Timestamp> observed_times;
-
-    engine.run(
-        std::vector<Bar>{
-            first_bar,
-            second_bar,
-            third_bar
-        },
-        [&](const Bar& bar) {
-            observed_times.push_back(bar.timestamp());
-        }
-    );
-
-    ASSERT_EQ(observed_times.size(), 3U);
-    EXPECT_EQ(observed_times[0], first_bar.timestamp());
-    EXPECT_EQ(observed_times[1], second_bar.timestamp());
-    EXPECT_EQ(observed_times[2], third_bar.timestamp());
-}
-
-TEST(BacktestEngineTest, ProcessesEveryBar)
-{
-    const auto start_time =
-        Timestamp{
-            std::chrono::seconds{100}
-        };
-
-    const auto first_bar = make_bar(160, 250);
-    const auto second_bar = make_bar(220, 255);
-    const auto third_bar = make_bar(280, 260);
-
-    BacktestClock clock{start_time};
-    BacktestEngine engine{clock};
-
-    std::size_t call_count = 0;
-
-    engine.run(
-        std::vector<Bar>{
-            first_bar,
-            second_bar,
-            third_bar
-        },
-        [&](const Bar&) {
-            ++call_count;
-        }
-    );
-
-    EXPECT_EQ(call_count, 3U);
-}
-
-TEST(BacktestEngineTest, EmptyBarSequenceDoesNothing)
-{
-    const auto start_time =
-        Timestamp{
-            std::chrono::seconds{100}
-        };
-
-    BacktestClock clock{start_time};
-    BacktestEngine engine{clock};
-
-    std::size_t call_count = 0;
-
-    engine.run(
-        {},
-        [&](const Bar&) {
-            ++call_count;
-        }
-    );
-
-    EXPECT_EQ(call_count, 0U);
-    EXPECT_EQ(clock.now(), start_time);
-}
-
-TEST(BacktestEngineTest, RejectsMissingHandler)
-{
-    const auto start_time =
-        Timestamp{
-            std::chrono::seconds{100}
-        };
-
-    BacktestClock clock{start_time};
-    BacktestEngine engine{clock};
-
-    EXPECT_THROW(
-        engine.run(
-            {},
-            BacktestEngine::BarHandler{}
-        ),
-        std::invalid_argument
-    );
-}
-
-TEST(BacktestEngineTest, RejectsBarsThatMoveTimeBackwards)
-{
-    const auto start_time =
-        Timestamp{
-            std::chrono::seconds{200}
-        };
-
-    const auto earlier_bar = make_bar(160, 250);
-
-    BacktestClock clock{start_time};
-    BacktestEngine engine{clock};
-
-    bool handler_called = false;
-
-    EXPECT_THROW(
-        engine.run(
-            std::vector<Bar>{earlier_bar},
-            [&](const Bar&) {
-                handler_called = true;
-            }
-        ),
-        std::logic_error
-    );
-
-    EXPECT_FALSE(handler_called);
-    EXPECT_EQ(clock.now(), start_time);
-}
-
-} // namespace
-
-namespace {
-
-class LifecycleStrategy final : public quantforge::strategy::Strategy {
-public:
-    void on_start() override {
-        events.push_back("start");
-    }
-
-    void on_bar(const quantforge::market::Bar& bar) override {
-        events.push_back("bar");
-
-        timestamps.push_back(bar.timestamp());
-        clock_times.push_back(clock_time);
-
-        ++bar_count;
-    }
-
-    void on_finish() override {
-        events.push_back("finish");
-    }
-
-    std::vector<std::string> events;
-    std::vector<quantforge::market::Timestamp> timestamps;
-    std::vector<quantforge::market::Timestamp> clock_times;
-    std::size_t bar_count{0};
-    quantforge::market::Timestamp clock_time{};
-};
-
-} // namespace
 
 namespace {
 
@@ -253,6 +26,194 @@ quantforge::market::Bar MakeBar(
         quantforge::market::Quantity{1000, 0}
     );
 }
+
+} // namespace
+
+TEST(BacktestEngineTest, AdvancesClockBeforeHandlerRuns) {
+    using namespace std::chrono_literals;
+
+    const auto start = quantforge::market::Timestamp{
+        std::chrono::seconds{100}
+    };
+
+    quantforge::backtest::BacktestClock clock(start);
+    quantforge::backtest::BacktestEngine engine(clock);
+
+    const auto bar_time = start + 5s;
+
+    std::vector<quantforge::market::Bar> bars{
+        MakeBar(bar_time),
+    };
+
+    bool handler_called = false;
+
+    engine.run(
+        bars,
+        [&](const quantforge::market::Bar& bar) {
+            handler_called = true;
+            EXPECT_EQ(clock.now(), bar.timestamp());
+        }
+    );
+
+    EXPECT_TRUE(handler_called);
+}
+
+TEST(BacktestEngineTest, ProcessesBarsInProvidedOrder) {
+    using namespace std::chrono_literals;
+
+    const auto start = quantforge::market::Timestamp{
+        std::chrono::seconds{100}
+    };
+
+    quantforge::backtest::BacktestClock clock(start);
+    quantforge::backtest::BacktestEngine engine(clock);
+
+    std::vector<quantforge::market::Bar> bars{
+        MakeBar(start),
+        MakeBar(start + 1s),
+        MakeBar(start + 2s),
+    };
+
+    std::vector<quantforge::market::Timestamp> processed;
+
+    engine.run(
+        bars,
+        [&](const quantforge::market::Bar& bar) {
+            processed.push_back(bar.timestamp());
+        }
+    );
+
+    ASSERT_EQ(processed.size(), 3);
+    EXPECT_EQ(processed[0], start);
+    EXPECT_EQ(processed[1], start + 1s);
+    EXPECT_EQ(processed[2], start + 2s);
+}
+
+TEST(BacktestEngineTest, ProcessesEveryBar) {
+    using namespace std::chrono_literals;
+
+    const auto start = quantforge::market::Timestamp{
+        std::chrono::seconds{100}
+    };
+
+    quantforge::backtest::BacktestClock clock(start);
+    quantforge::backtest::BacktestEngine engine(clock);
+
+    std::vector<quantforge::market::Bar> bars{
+        MakeBar(start),
+        MakeBar(start + 1s),
+        MakeBar(start + 2s),
+    };
+
+    std::size_t count = 0;
+
+    engine.run(
+        bars,
+        [&](const quantforge::market::Bar&) {
+            ++count;
+        }
+    );
+
+    EXPECT_EQ(count, 3);
+}
+
+TEST(BacktestEngineTest, EmptyBarSequenceDoesNothing) {
+    const auto start = quantforge::market::Timestamp{
+        std::chrono::seconds{100}
+    };
+
+    quantforge::backtest::BacktestClock clock(start);
+    quantforge::backtest::BacktestEngine engine(clock);
+
+    const std::vector<quantforge::market::Bar> bars;
+
+    std::size_t count = 0;
+
+    engine.run(
+        bars,
+        [&](const quantforge::market::Bar&) {
+            ++count;
+        }
+    );
+
+    EXPECT_EQ(count, 0);
+    EXPECT_EQ(clock.now(), start);
+}
+
+TEST(BacktestEngineTest, RejectsMissingHandler) {
+    const auto start = quantforge::market::Timestamp{
+        std::chrono::seconds{100}
+    };
+
+    quantforge::backtest::BacktestClock clock(start);
+    quantforge::backtest::BacktestEngine engine(clock);
+
+    const std::vector<quantforge::market::Bar> bars;
+
+    EXPECT_THROW(
+        engine.run(bars, {}),
+        std::invalid_argument
+    );
+}
+
+TEST(BacktestEngineTest, RejectsBarsThatMoveTimeBackwards) {
+    using namespace std::chrono_literals;
+
+    const auto start = quantforge::market::Timestamp{
+        std::chrono::seconds{100}
+    };
+
+    quantforge::backtest::BacktestClock clock(start);
+    quantforge::backtest::BacktestEngine engine(clock);
+
+    std::vector<quantforge::market::Bar> bars{
+        MakeBar(start + 2s),
+        MakeBar(start + 1s),
+    };
+
+    std::size_t processed = 0;
+
+    EXPECT_THROW(
+        engine.run(
+            bars,
+            [&](const quantforge::market::Bar&) {
+                ++processed;
+            }
+        ),
+        std::logic_error
+    );
+
+    EXPECT_EQ(processed, 1);
+    EXPECT_EQ(clock.now(), start + 2s);
+}
+
+namespace {
+
+class LifecycleStrategy final : public quantforge::strategy::Strategy {
+public:
+    void on_start(
+        const quantforge::strategy::StrategyContext&
+    ) override {
+        events.push_back("start");
+    }
+
+    void on_bar(
+        const quantforge::strategy::StrategyContext&,
+        const quantforge::market::Bar&
+    ) override {
+        events.push_back("bar");
+        ++bar_count;
+    }
+
+    void on_finish(
+        const quantforge::strategy::StrategyContext&
+    ) override {
+        events.push_back("finish");
+    }
+
+    std::vector<std::string> events;
+    std::size_t bar_count{0};
+};
 
 } // namespace
 
@@ -313,24 +274,18 @@ TEST(BacktestEngineTest, AdvancesClockBeforeStrategyBar) {
     quantforge::backtest::BacktestClock clock(start);
     quantforge::backtest::BacktestEngine engine(clock);
 
-    class ClockAwareStrategy final : public quantforge::strategy::Strategy {
+    class ClockAwareStrategy final
+        : public quantforge::strategy::Strategy {
     public:
-        explicit ClockAwareStrategy(
-            quantforge::backtest::BacktestClock& clock
-        )
-            : clock_(clock) {}
-
         void on_bar(
+            const quantforge::strategy::StrategyContext& context,
             const quantforge::market::Bar& bar
         ) override {
-            EXPECT_EQ(clock_.now(), bar.timestamp());
+            EXPECT_EQ(context.now(), bar.timestamp());
         }
-
-    private:
-        quantforge::backtest::BacktestClock& clock_;
     };
 
-    ClockAwareStrategy strategy(clock);
+    ClockAwareStrategy strategy;
 
     const auto bar_time = start + 5s;
 
@@ -351,26 +306,24 @@ TEST(BacktestEngineTest, CallsFinishAfterLastBar) {
     quantforge::backtest::BacktestClock clock(start);
     quantforge::backtest::BacktestEngine engine(clock);
 
-    class FinishAwareStrategy final : public quantforge::strategy::Strategy {
+    class FinishAwareStrategy final
+        : public quantforge::strategy::Strategy {
     public:
-        explicit FinishAwareStrategy(
-            quantforge::backtest::BacktestClock& clock
-        )
-            : clock_(clock) {}
+        void on_bar(
+            const quantforge::strategy::StrategyContext&,
+            const quantforge::market::Bar&
+        ) override {}
 
-        void on_bar(const quantforge::market::Bar&) override {}
-
-        void on_finish() override {
-            finish_time = clock_.now();
+        void on_finish(
+            const quantforge::strategy::StrategyContext& context
+        ) override {
+            finish_time = context.now();
         }
 
         quantforge::market::Timestamp finish_time{};
-
-    private:
-        quantforge::backtest::BacktestClock& clock_;
     };
 
-    FinishAwareStrategy strategy(clock);
+    FinishAwareStrategy strategy;
 
     const auto final_time = start + 10s;
 
@@ -384,8 +337,6 @@ TEST(BacktestEngineTest, CallsFinishAfterLastBar) {
 }
 
 TEST(BacktestEngineTest, RunsEmptyStrategyBacktestLifecycle) {
-    using namespace std::chrono_literals;
-
     const auto start = quantforge::market::Timestamp{
         std::chrono::seconds{100}
     };

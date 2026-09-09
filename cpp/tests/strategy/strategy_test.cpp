@@ -8,15 +8,22 @@ namespace {
 
 class TestStrategy final : public quantforge::strategy::Strategy {
 public:
-    void on_start() override {
+    void on_start(
+        const quantforge::strategy::StrategyContext&
+    ) override {
         ++start_count;
     }
 
-    void on_bar(const quantforge::market::Bar&) override {
+    void on_bar(
+        const quantforge::strategy::StrategyContext&,
+        const quantforge::market::Bar&
+    ) override {
         ++bar_count;
     }
 
-    void on_finish() override {
+    void on_finish(
+        const quantforge::strategy::StrategyContext&
+    ) override {
         ++finish_count;
     }
 
@@ -30,8 +37,14 @@ public:
 TEST(StrategyTest, SupportsLifecycleCallbacks) {
     TestStrategy strategy;
 
-    strategy.on_start();
-    strategy.on_finish();
+    const quantforge::strategy::StrategyContext context{
+        quantforge::market::Timestamp{
+            std::chrono::seconds{100}
+        }
+    };
+
+    strategy.on_start(context);
+    strategy.on_finish(context);
 
     EXPECT_EQ(strategy.start_count, 1);
     EXPECT_EQ(strategy.finish_count, 1);
@@ -39,6 +52,12 @@ TEST(StrategyTest, SupportsLifecycleCallbacks) {
 
 TEST(StrategyTest, ReceivesBars) {
     TestStrategy strategy;
+
+    const quantforge::strategy::StrategyContext context{
+        quantforge::market::Timestamp{
+            std::chrono::seconds{100}
+        }
+    };
 
     quantforge::market::InstrumentId instrument_id{1};
 
@@ -62,7 +81,19 @@ TEST(StrategyTest, ReceivesBars) {
         quantforge::market::Quantity{1000, 0}
     );
 
-    strategy.on_bar(bar);
+    strategy.on_bar(context, bar);
 
     EXPECT_EQ(strategy.bar_count, 1);
+}
+
+TEST(StrategyTest, ContextExposesCurrentTime) {
+    const auto timestamp = quantforge::market::Timestamp{
+        std::chrono::seconds{123}
+    };
+
+    const quantforge::strategy::StrategyContext context{
+        timestamp
+    };
+
+    EXPECT_EQ(context.now(), timestamp);
 }
