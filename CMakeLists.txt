@@ -58,6 +58,7 @@ enable_testing()
 find_package(GTest REQUIRED)
 
 add_executable(quantforge-tests
+   cpp/tests/strategy/strategy_test.cpp
 
    cpp/tests/backtest/backtest_engine_test.cpp
 
