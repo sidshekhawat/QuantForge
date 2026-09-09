@@ -23,4 +23,18 @@ void BacktestEngine::run(
     }
 }
 
+void BacktestEngine::run(
+    const std::vector<market::Bar>& bars,
+    strategy::Strategy& strategy)
+{
+    strategy.on_start();
+
+    for (const auto& bar : bars) {
+        clock_.advance_to(bar.timestamp());
+        strategy.on_bar(bar);
+    }
+
+    strategy.on_finish();
+}
+
 } // namespace quantforge::backtest
