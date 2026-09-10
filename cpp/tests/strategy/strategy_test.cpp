@@ -1,10 +1,20 @@
 #include "quantforge/strategy/strategy.hpp"
 
 #include <chrono>
+#include <vector>
 
 #include <gtest/gtest.h>
 
 namespace {
+
+class TestSignalSink final : public quantforge::signal::SignalSink {
+public:
+    void emit(const quantforge::signal::Signal& signal) override {
+        signals.push_back(signal);
+    }
+
+    std::vector<quantforge::signal::Signal> signals;
+};
 
 class TestStrategy final : public quantforge::strategy::Strategy {
 public:
@@ -36,11 +46,13 @@ public:
 
 TEST(StrategyTest, SupportsLifecycleCallbacks) {
     TestStrategy strategy;
+    TestSignalSink sink;
 
     const quantforge::strategy::StrategyContext context{
         quantforge::market::Timestamp{
             std::chrono::seconds{100}
-        }
+        },
+        sink
     };
 
     strategy.on_start(context);
@@ -52,28 +64,24 @@ TEST(StrategyTest, SupportsLifecycleCallbacks) {
 
 TEST(StrategyTest, ReceivesBars) {
     TestStrategy strategy;
+    TestSignalSink sink;
 
     const quantforge::strategy::StrategyContext context{
         quantforge::market::Timestamp{
             std::chrono::seconds{100}
-        }
-    };
-
-    quantforge::market::InstrumentId instrument_id{1};
-
-    quantforge::market::Timestamp timestamp{
-        std::chrono::seconds{100}
-    };
-
-    quantforge::market::Timeframe timeframe{
-        1,
-        quantforge::market::TimeframeUnit::Minute
+        },
+        sink
     };
 
     quantforge::market::Bar bar(
-        instrument_id,
-        timestamp,
-        timeframe,
+        quantforge::market::InstrumentId{1},
+        quantforge::market::Timestamp{
+            std::chrono::seconds{100}
+        },
+        quantforge::market::Timeframe{
+            1,
+            quantforge::market::TimeframeUnit::Minute
+        },
         quantforge::market::Price{10000, 2},
         quantforge::market::Price{10100, 2},
         quantforge::market::Price{9900, 2},
@@ -87,13 +95,50 @@ TEST(StrategyTest, ReceivesBars) {
 }
 
 TEST(StrategyTest, ContextExposesCurrentTime) {
+    TestSignalSink sink;
+
     const auto timestamp = quantforge::market::Timestamp{
         std::chrono::seconds{123}
     };
 
     const quantforge::strategy::StrategyContext context{
-        timestamp
+        timestamp,
+        sink
     };
 
     EXPECT_EQ(context.now(), timestamp);
 }
+
+TEST(StrategyTest, ContextEmitsSignalThroughSink) {
+    TestSignalSink sink;
+
+    const auto timestamp = quantforge::market::Timestamp{
+        std::chrono::seconds{123}
+    };
+
+    const quantforge::strategy::StrategyContext context{
+        timestamp,
+        sink
+    };
+
+    const quantforge::signal::Signal signal(
+        quantforge::market::InstrumentId{42},
+        timestamp,
+        quantforge::signal::SignalDirection::Buy,
+        80
+    );
+
+    context.emit_signal(signal);
+
+    ASSERT_EQ(sink.signals.size(), 1);
+    EXPECT_EQ(
+        sink.signals[0].instrument_id(),
+        quantforge::market::InstrumentId{42}
+    );
+    EXPECT_EQ(
+        sink.signals[0].direction(),
+        quantforge::signal::SignalDirection::Buy
+    );
+    EXPECT_EQ(sink.signals[0].strength(), 80);
+}
+

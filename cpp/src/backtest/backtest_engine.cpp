@@ -25,19 +25,32 @@ void BacktestEngine::run(
 
 void BacktestEngine::run(
     const std::vector<market::Bar>& bars,
-    strategy::Strategy& strategy)
+    strategy::Strategy& strategy,
+    signal::SignalSink& signal_sink)
 {
-    strategy::StrategyContext start_context(clock_.now());
+    strategy::StrategyContext start_context(
+        clock_.now(),
+        signal_sink
+    );
+
     strategy.on_start(start_context);
 
     for (const auto& bar : bars) {
         clock_.advance_to(bar.timestamp());
 
-        strategy::StrategyContext bar_context(clock_.now());
+        strategy::StrategyContext bar_context(
+            clock_.now(),
+            signal_sink
+        );
+
         strategy.on_bar(bar_context, bar);
     }
 
-    strategy::StrategyContext finish_context(clock_.now());
+    strategy::StrategyContext finish_context(
+        clock_.now(),
+        signal_sink
+    );
+
     strategy.on_finish(finish_context);
 }
 

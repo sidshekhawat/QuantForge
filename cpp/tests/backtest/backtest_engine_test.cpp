@@ -29,6 +29,19 @@ quantforge::market::Bar MakeBar(
 
 } // namespace
 
+namespace {
+
+class TestSignalSink final : public quantforge::signal::SignalSink {
+public:
+    void emit(const quantforge::signal::Signal& signal) override {
+        signals.push_back(signal);
+    }
+
+    std::vector<quantforge::signal::Signal> signals;
+};
+
+} // namespace
+
 TEST(BacktestEngineTest, AdvancesClockBeforeHandlerRuns) {
     using namespace std::chrono_literals;
 
@@ -227,13 +240,14 @@ TEST(BacktestEngineTest, RunsStrategyLifecycleInOrder) {
     quantforge::backtest::BacktestClock clock(start);
     quantforge::backtest::BacktestEngine engine(clock);
     LifecycleStrategy strategy;
+    TestSignalSink sink;
 
     std::vector<quantforge::market::Bar> bars{
         MakeBar(start),
         MakeBar(start + 1s),
     };
 
-    engine.run(bars, strategy);
+    engine.run(bars, strategy, sink);
 
     ASSERT_EQ(strategy.events.size(), 4);
     EXPECT_EQ(strategy.events[0], "start");
@@ -252,6 +266,7 @@ TEST(BacktestEngineTest, CallsStrategyForEveryBar) {
     quantforge::backtest::BacktestClock clock(start);
     quantforge::backtest::BacktestEngine engine(clock);
     LifecycleStrategy strategy;
+    TestSignalSink sink;
 
     std::vector<quantforge::market::Bar> bars{
         MakeBar(start),
@@ -259,7 +274,7 @@ TEST(BacktestEngineTest, CallsStrategyForEveryBar) {
         MakeBar(start + 2s),
     };
 
-    engine.run(bars, strategy);
+    engine.run(bars, strategy, sink);
 
     EXPECT_EQ(strategy.bar_count, 3);
 }
@@ -286,6 +301,7 @@ TEST(BacktestEngineTest, AdvancesClockBeforeStrategyBar) {
     };
 
     ClockAwareStrategy strategy;
+    TestSignalSink sink;
 
     const auto bar_time = start + 5s;
 
@@ -293,7 +309,7 @@ TEST(BacktestEngineTest, AdvancesClockBeforeStrategyBar) {
         MakeBar(bar_time),
     };
 
-    engine.run(bars, strategy);
+    engine.run(bars, strategy, sink);
 }
 
 TEST(BacktestEngineTest, CallsFinishAfterLastBar) {
@@ -324,6 +340,7 @@ TEST(BacktestEngineTest, CallsFinishAfterLastBar) {
     };
 
     FinishAwareStrategy strategy;
+    TestSignalSink sink;
 
     const auto final_time = start + 10s;
 
@@ -331,7 +348,7 @@ TEST(BacktestEngineTest, CallsFinishAfterLastBar) {
         MakeBar(final_time),
     };
 
-    engine.run(bars, strategy);
+    engine.run(bars, strategy, sink);
 
     EXPECT_EQ(strategy.finish_time, final_time);
 }
@@ -344,10 +361,11 @@ TEST(BacktestEngineTest, RunsEmptyStrategyBacktestLifecycle) {
     quantforge::backtest::BacktestClock clock(start);
     quantforge::backtest::BacktestEngine engine(clock);
     LifecycleStrategy strategy;
+    TestSignalSink sink;
 
     const std::vector<quantforge::market::Bar> bars;
 
-    engine.run(bars, strategy);
+    engine.run(bars, strategy, sink);
 
     ASSERT_EQ(strategy.events.size(), 2);
     EXPECT_EQ(strategy.events[0], "start");

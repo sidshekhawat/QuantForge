@@ -3,6 +3,7 @@
 #include "quantforge/backtest/backtest_clock.hpp"
 #include "quantforge/market/bar.hpp"
 #include "quantforge/strategy/strategy.hpp"
+#include "quantforge/signal/signal_sink.hpp"
 
 #include <functional>
 #include <vector>
@@ -22,7 +23,8 @@ public:
 
     void run(
         const std::vector<market::Bar>& bars,
-        strategy::Strategy& strategy
+        strategy::Strategy& strategy,
+        signal::SignalSink& signal_sink
     );
 
 private:
