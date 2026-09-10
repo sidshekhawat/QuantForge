@@ -63,6 +63,7 @@ find_package(GTest REQUIRED)
 add_executable(quantforge-tests
    cpp/tests/risk/risk_decision_test.cpp
    cpp/tests/portfolio/position_test.cpp
+   cpp/tests/portfolio/portfolio_state_test.cpp
    cpp/tests/risk/risk_engine_test.cpp
    cpp/tests/signal/signal_test.cpp
    cpp/tests/strategy/strategy_test.cpp
