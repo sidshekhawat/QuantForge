@@ -15,6 +15,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # QuantForge Core Library
 add_library(quantforge-core
+   cpp/src/risk/risk_decision.cpp
    cpp/src/signal/signal.cpp
 
    cpp/src/backtest/backtest_engine.cpp
@@ -59,6 +60,8 @@ enable_testing()
 find_package(GTest REQUIRED)
 
 add_executable(quantforge-tests
+   cpp/tests/risk/risk_decision_test.cpp
+   cpp/tests/risk/risk_engine_test.cpp
    cpp/tests/signal/signal_test.cpp
    cpp/tests/strategy/strategy_test.cpp
 
