@@ -1,104 +1,158 @@
 #include "quantforge/risk/risk_engine.hpp"
 
-#include <chrono>
-
 #include <gtest/gtest.h>
+
+#include <unordered_map>
+#include <utility>
 
 namespace {
 
-quantforge::signal::Signal MakeSignal() {
-    return quantforge::signal::Signal(
-        quantforge::market::InstrumentId{1},
-        quantforge::market::Timestamp{
-            std::chrono::seconds{100}
-        },
-        quantforge::signal::SignalDirection::Buy,
-        80
-    );
-}
+using quantforge::market::InstrumentId;
+using quantforge::market::Price;
+using quantforge::market::Quantity;
+using quantforge::market::Timestamp;
+using quantforge::portfolio::PortfolioState;
+using quantforge::portfolio::Position;
+using quantforge::risk::RiskDecision;
+using quantforge::risk::RiskEngine;
+using quantforge::signal::Signal;
+using quantforge::signal::SignalDirection;
 
-class AllowAllRiskEngine final
-    : public quantforge::risk::RiskEngine {
+class TestPortfolioState final : public PortfolioState {
 public:
-    quantforge::risk::RiskDecision evaluate(
-        const quantforge::signal::Signal&
-    ) override {
-        return quantforge::risk::RiskDecision::approved();
-    }
-};
-
-class RejectAllRiskEngine final
-    : public quantforge::risk::RiskEngine {
-public:
-    quantforge::risk::RiskDecision evaluate(
-        const quantforge::signal::Signal&
-    ) override {
-        return quantforge::risk::RiskDecision::rejected(
-            "Signal rejected by risk policy."
+    void add_position(Position position) {
+        positions_.emplace(
+            position.instrument_id(),
+            std::move(position)
         );
     }
-};
 
-} // namespace
+    [[nodiscard]] std::optional<Position> find_position(
+        InstrumentId instrument_id
+    ) const override {
+        const auto it = positions_.find(instrument_id);
 
-TEST(RiskEngineTest, CanApproveSignal) {
-    AllowAllRiskEngine engine;
-
-    const auto decision = engine.evaluate(MakeSignal());
-
-    EXPECT_TRUE(decision.is_approved());
-    EXPECT_FALSE(decision.is_rejected());
-}
-
-TEST(RiskEngineTest, CanRejectSignal) {
-    RejectAllRiskEngine engine;
-
-    const auto decision = engine.evaluate(MakeSignal());
-
-    EXPECT_TRUE(decision.is_rejected());
-
-    EXPECT_EQ(
-        decision.reason(),
-        "Signal rejected by risk policy."
-    );
-}
-
-TEST(RiskEngineTest, ReceivesSignalWithoutModifyingIt) {
-    class InspectingRiskEngine final
-        : public quantforge::risk::RiskEngine {
-    public:
-        quantforge::risk::RiskDecision evaluate(
-            const quantforge::signal::Signal& signal
-        ) override {
-            received_instrument = signal.instrument_id();
-            received_direction = signal.direction();
-            received_strength = signal.strength();
-
-            return quantforge::risk::RiskDecision::approved();
+        if (it == positions_.end()) {
+            return std::nullopt;
         }
 
-        quantforge::market::InstrumentId received_instrument{0};
-        quantforge::signal::SignalDirection received_direction{
-            quantforge::signal::SignalDirection::Hold
-        };
-        std::uint8_t received_strength{0};
+        return it->second;
+    }
+
+private:
+    struct InstrumentIdHash {
+        std::size_t operator()(InstrumentId instrument_id) const noexcept {
+            return std::hash<InstrumentId::ValueType>{}(
+                instrument_id.value()
+            );
+        }
     };
 
-    InspectingRiskEngine engine;
-    const auto signal = MakeSignal();
+    std::unordered_map<
+        InstrumentId,
+        Position,
+        InstrumentIdHash
+    > positions_;
+};
 
-    engine.evaluate(signal);
+class TestRiskEngine final : public RiskEngine {
+public:
+    [[nodiscard]] RiskDecision evaluate(
+        const Signal& signal,
+        const PortfolioState& portfolio_state
+    ) override {
+        received_signal_ = &signal;
+        received_portfolio_state_ = &portfolio_state;
 
-    EXPECT_EQ(
-        engine.received_instrument,
-        quantforge::market::InstrumentId{1}
+        return RiskDecision::approved();
+    }
+
+    [[nodiscard]] const Signal* received_signal() const noexcept {
+        return received_signal_;
+    }
+
+    [[nodiscard]] const PortfolioState* received_portfolio_state() const noexcept {
+        return received_portfolio_state_;
+    }
+
+private:
+    const Signal* received_signal_ = nullptr;
+    const PortfolioState* received_portfolio_state_ = nullptr;
+};
+
+TEST(RiskEngineTest, CanApproveSignalWithPortfolioState) {
+    TestRiskEngine risk_engine;
+    TestPortfolioState portfolio_state;
+
+    const Signal signal(
+        InstrumentId{42},
+        Timestamp{},
+        SignalDirection::Buy,
+        100
     );
 
-    EXPECT_EQ(
-        engine.received_direction,
-        quantforge::signal::SignalDirection::Buy
+    const auto decision = risk_engine.evaluate(
+        signal,
+        portfolio_state
     );
 
-    EXPECT_EQ(engine.received_strength, 80);
+    EXPECT_TRUE(decision.is_approved());
 }
 
+TEST(RiskEngineTest, ReceivesSignalAndPortfolioState) {
+    TestRiskEngine risk_engine;
+    TestPortfolioState portfolio_state;
+
+    const Signal signal(
+        InstrumentId{42},
+        Timestamp{},
+        SignalDirection::Buy,
+        100
+    );
+
+    const auto decision = risk_engine.evaluate(
+        signal,
+        portfolio_state
+    );
+    ASSERT_TRUE(decision.is_approved());
+
+    EXPECT_EQ(risk_engine.received_signal(), &signal);
+    EXPECT_EQ(
+        risk_engine.received_portfolio_state(),
+        &portfolio_state
+    );
+}
+
+TEST(RiskEngineTest, CanInspectExistingPositionThroughPortfolioState) {
+    TestRiskEngine risk_engine;
+    TestPortfolioState portfolio_state;
+
+    portfolio_state.add_position(
+        Position(
+            InstrumentId{42},
+            Quantity{100, 0},
+            Price{15000, 2}
+        )
+    );
+
+    const Signal signal(
+        InstrumentId{42},
+        Timestamp{},
+        SignalDirection::Buy,
+        100
+    );
+
+    const auto decision = risk_engine.evaluate(
+        signal,
+        portfolio_state
+    );
+    ASSERT_TRUE(decision.is_approved());
+
+    const auto position =
+        portfolio_state.find_position(InstrumentId{42});
+
+    ASSERT_TRUE(position.has_value());
+    EXPECT_EQ(position->quantity(), (Quantity{100, 0}));
+}
+
+} // namespace
