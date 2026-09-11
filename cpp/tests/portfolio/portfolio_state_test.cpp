@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <functional>
 #include <unordered_map>
 #include <utility>
 
@@ -12,6 +13,7 @@ using quantforge::market::Price;
 using quantforge::market::Quantity;
 using quantforge::portfolio::PortfolioState;
 using quantforge::portfolio::Position;
+using quantforge::portfolio::PositionSide;
 
 class TestPortfolioState final : public PortfolioState {
 public:
@@ -64,6 +66,7 @@ TEST(PortfolioStateTest, ReturnsExistingPosition) {
     state.add_position(
         Position(
             InstrumentId{42},
+            PositionSide::Long,
             Quantity{100, 0},
             Price{15000, 2}
         )
@@ -81,6 +84,7 @@ TEST(PortfolioStateTest, ReturnsPositionState) {
     state.add_position(
         Position(
             InstrumentId{42},
+            PositionSide::Long,
             Quantity{100, 0},
             Price{15000, 2}
         )
@@ -89,6 +93,7 @@ TEST(PortfolioStateTest, ReturnsPositionState) {
     const auto position = state.find_position(InstrumentId{42});
 
     ASSERT_TRUE(position.has_value());
+    EXPECT_EQ(position->side(), PositionSide::Long);
     EXPECT_EQ(position->quantity(), (Quantity{100, 0}));
     EXPECT_EQ(
         position->average_entry_price(),

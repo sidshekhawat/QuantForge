@@ -130,6 +130,7 @@ TEST(RiskEngineTest, CanInspectExistingPositionThroughPortfolioState) {
     portfolio_state.add_position(
         Position(
             InstrumentId{42},
+            quantforge::portfolio::PositionSide::Long,
             Quantity{100, 0},
             Price{15000, 2}
         )
