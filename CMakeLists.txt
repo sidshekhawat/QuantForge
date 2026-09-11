@@ -16,6 +16,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # QuantForge Core Library
 add_library(quantforge-core
    cpp/src/risk/risk_decision.cpp
+   cpp/src/risk/max_position_rule.cpp
    cpp/src/order/order_intent.cpp
    cpp/src/portfolio/position.cpp
    cpp/src/signal/signal.cpp
@@ -67,6 +68,7 @@ add_executable(quantforge-tests
    cpp/tests/portfolio/position_test.cpp
    cpp/tests/portfolio/portfolio_state_test.cpp
    cpp/tests/risk/risk_engine_test.cpp
+   cpp/tests/risk/max_position_rule_test.cpp
    cpp/tests/signal/signal_test.cpp
    cpp/tests/strategy/strategy_test.cpp
 
