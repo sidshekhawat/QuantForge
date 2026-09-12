@@ -19,6 +19,7 @@ add_library(quantforge-core
    cpp/src/risk/risk_engine.cpp
    cpp/src/risk/max_position_rule.cpp
    cpp/src/order/order_intent.cpp
+   cpp/src/order/order.cpp
    cpp/src/portfolio/position.cpp
    cpp/src/signal/signal.cpp
 
@@ -67,6 +68,7 @@ add_executable(quantforge-tests
    cpp/tests/risk/risk_decision_test.cpp
    cpp/tests/risk/risk_rule_test.cpp
    cpp/tests/order/order_intent_test.cpp
+   cpp/tests/order/order_test.cpp
    cpp/tests/portfolio/position_test.cpp
    cpp/tests/portfolio/portfolio_state_test.cpp
    cpp/tests/risk/risk_engine_test.cpp
