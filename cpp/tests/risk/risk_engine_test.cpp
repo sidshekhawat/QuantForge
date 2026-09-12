@@ -1,22 +1,30 @@
+#include "quantforge/risk/max_position_rule.hpp"
 #include "quantforge/risk/risk_engine.hpp"
 
 #include <gtest/gtest.h>
 
+#include <functional>
+#include <memory>
+#include <optional>
+#include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 namespace {
 
 using quantforge::market::InstrumentId;
 using quantforge::market::Price;
 using quantforge::market::Quantity;
-using quantforge::market::Timestamp;
+using quantforge::order::OrderIntent;
+using quantforge::order::OrderSide;
 using quantforge::portfolio::PortfolioState;
 using quantforge::portfolio::Position;
+using quantforge::portfolio::PositionSide;
+using quantforge::risk::MaxPositionRule;
 using quantforge::risk::RiskDecision;
 using quantforge::risk::RiskEngine;
-using quantforge::signal::Signal;
-using quantforge::signal::SignalDirection;
+using quantforge::risk::RiskRule;
 
 class TestPortfolioState final : public PortfolioState {
 public:
@@ -55,105 +63,273 @@ private:
     > positions_;
 };
 
-class TestRiskEngine final : public RiskEngine {
+class FixedDecisionRule final : public RiskRule {
 public:
+    explicit FixedDecisionRule(
+        RiskDecision decision)
+        : decision_(std::move(decision)) {}
+
     [[nodiscard]] RiskDecision evaluate(
-        const Signal& signal,
-        const PortfolioState& portfolio_state
-    ) override {
-        received_signal_ = &signal;
-        received_portfolio_state_ = &portfolio_state;
-
-        return RiskDecision::approved();
+        const OrderIntent&,
+        const PortfolioState&
+    ) const override {
+        ++evaluation_count_;
+        return decision_;
     }
 
-    [[nodiscard]] const Signal* received_signal() const noexcept {
-        return received_signal_;
-    }
-
-    [[nodiscard]] const PortfolioState* received_portfolio_state() const noexcept {
-        return received_portfolio_state_;
+    [[nodiscard]] int evaluation_count() const noexcept {
+        return evaluation_count_;
     }
 
 private:
-    const Signal* received_signal_ = nullptr;
-    const PortfolioState* received_portfolio_state_ = nullptr;
+    RiskDecision decision_;
+    mutable int evaluation_count_ = 0;
 };
 
-TEST(RiskEngineTest, CanApproveSignalWithPortfolioState) {
-    TestRiskEngine risk_engine;
+class RecordingRule final : public RiskRule {
+public:
+    RecordingRule(
+        std::string name,
+        std::vector<std::string>& evaluations)
+        : name_(std::move(name)),
+          evaluations_(evaluations) {}
+
+    [[nodiscard]] RiskDecision evaluate(
+        const OrderIntent&,
+        const PortfolioState&
+    ) const override {
+        evaluations_.push_back(name_);
+        return RiskDecision::approved();
+    }
+
+private:
+    std::string name_;
+    std::vector<std::string>& evaluations_;
+};
+
+TEST(RiskEngineTest, ApprovesWhenNoRulesReject) {
+    RiskEngine engine;
+
     TestPortfolioState portfolio_state;
 
-    const Signal signal(
+    const OrderIntent order(
         InstrumentId{42},
-        Timestamp{},
-        SignalDirection::Buy,
-        100
+        OrderSide::Buy,
+        Quantity{50, 0}
     );
 
-    const auto decision = risk_engine.evaluate(
-        signal,
+    const auto decision = engine.evaluate(
+        order,
         portfolio_state
     );
 
     EXPECT_TRUE(decision.is_approved());
 }
 
-TEST(RiskEngineTest, ReceivesSignalAndPortfolioState) {
-    TestRiskEngine risk_engine;
-    TestPortfolioState portfolio_state;
+TEST(RiskEngineTest, ApprovesWhenAllRulesApprove) {
+    RiskEngine engine;
 
-    const Signal signal(
-        InstrumentId{42},
-        Timestamp{},
-        SignalDirection::Buy,
-        100
-    );
-
-    const auto decision = risk_engine.evaluate(
-        signal,
-        portfolio_state
-    );
-    ASSERT_TRUE(decision.is_approved());
-
-    EXPECT_EQ(risk_engine.received_signal(), &signal);
-    EXPECT_EQ(
-        risk_engine.received_portfolio_state(),
-        &portfolio_state
-    );
-}
-
-TEST(RiskEngineTest, CanInspectExistingPositionThroughPortfolioState) {
-    TestRiskEngine risk_engine;
-    TestPortfolioState portfolio_state;
-
-    portfolio_state.add_position(
-        Position(
-            InstrumentId{42},
-            quantforge::portfolio::PositionSide::Long,
-            Quantity{100, 0},
-            Price{15000, 2}
+    engine.add_rule(
+        std::make_unique<MaxPositionRule>(
+            Quantity{100, 0}
         )
     );
 
-    const Signal signal(
+    TestPortfolioState portfolio_state;
+
+    const OrderIntent order(
         InstrumentId{42},
-        Timestamp{},
-        SignalDirection::Buy,
-        100
+        OrderSide::Buy,
+        Quantity{50, 0}
     );
 
-    const auto decision = risk_engine.evaluate(
-        signal,
+    const auto decision = engine.evaluate(
+        order,
         portfolio_state
     );
+
+    EXPECT_TRUE(decision.is_approved());
+}
+
+TEST(RiskEngineTest, RejectsWhenRuleRejects) {
+    RiskEngine engine;
+
+    engine.add_rule(
+        std::make_unique<MaxPositionRule>(
+            Quantity{100, 0}
+        )
+    );
+
+    TestPortfolioState portfolio_state;
+
+    const OrderIntent order(
+        InstrumentId{42},
+        OrderSide::Buy,
+        Quantity{101, 0}
+    );
+
+    const auto decision = engine.evaluate(
+        order,
+        portfolio_state
+    );
+
+    EXPECT_TRUE(decision.is_rejected());
+}
+
+TEST(RiskEngineTest, PreservesRejectionReason) {
+    RiskEngine engine;
+
+    engine.add_rule(
+        std::make_unique<FixedDecisionRule>(
+            RiskDecision::rejected("test rejection")
+        )
+    );
+
+    TestPortfolioState portfolio_state;
+
+    const OrderIntent order(
+        InstrumentId{42},
+        OrderSide::Buy,
+        Quantity{1, 0}
+    );
+
+    const auto decision = engine.evaluate(
+        order,
+        portfolio_state
+    );
+
+    ASSERT_TRUE(decision.is_rejected());
+    EXPECT_EQ(decision.reason(), "test rejection");
+}
+
+TEST(RiskEngineTest, StopsAfterFirstRejection) {
+    auto rejecting_rule =
+        std::make_unique<FixedDecisionRule>(
+            RiskDecision::rejected("first rejection")
+        );
+
+    auto approving_rule =
+        std::make_unique<FixedDecisionRule>(
+            RiskDecision::approved()
+        );
+
+    auto* approving_rule_ptr = approving_rule.get();
+
+    RiskEngine engine;
+    engine.add_rule(std::move(rejecting_rule));
+    engine.add_rule(std::move(approving_rule));
+
+    TestPortfolioState portfolio_state;
+
+    const OrderIntent order(
+        InstrumentId{42},
+        OrderSide::Buy,
+        Quantity{1, 0}
+    );
+
+    const auto decision = engine.evaluate(
+        order,
+        portfolio_state
+    );
+
+    EXPECT_TRUE(decision.is_rejected());
+    EXPECT_EQ(decision.reason(), "first rejection");
+    EXPECT_EQ(approving_rule_ptr->evaluation_count(), 0);
+}
+
+TEST(RiskEngineTest, EvaluatesRulesInInsertionOrder) {
+    std::vector<std::string> evaluations;
+
+    RiskEngine engine;
+
+    engine.add_rule(
+        std::make_unique<RecordingRule>(
+            "first",
+            evaluations
+        )
+    );
+
+    engine.add_rule(
+        std::make_unique<RecordingRule>(
+            "second",
+            evaluations
+        )
+    );
+
+    TestPortfolioState portfolio_state;
+
+    const OrderIntent order(
+        InstrumentId{42},
+        OrderSide::Buy,
+        Quantity{1, 0}
+    );
+
+    const auto decision = engine.evaluate(
+        order,
+        portfolio_state
+    );
+
     ASSERT_TRUE(decision.is_approved());
 
-    const auto position =
-        portfolio_state.find_position(InstrumentId{42});
+    ASSERT_EQ(evaluations.size(), 2U);
+    EXPECT_EQ(evaluations[0], "first");
+    EXPECT_EQ(evaluations[1], "second");
+}
 
-    ASSERT_TRUE(position.has_value());
-    EXPECT_EQ(position->quantity(), (Quantity{100, 0}));
+TEST(RiskEngineTest, RejectingRuleStopsLaterRules) {
+    std::vector<std::string> evaluations;
+
+    auto rejecting_rule =
+        std::make_unique<FixedDecisionRule>(
+            RiskDecision::rejected("blocked")
+        );
+
+    auto later_rule =
+        std::make_unique<RecordingRule>(
+            "later",
+            evaluations
+        );
+
+    RiskEngine engine;
+    engine.add_rule(std::move(rejecting_rule));
+    engine.add_rule(std::move(later_rule));
+
+    TestPortfolioState portfolio_state;
+
+    const OrderIntent order(
+        InstrumentId{42},
+        OrderSide::Buy,
+        Quantity{1, 0}
+    );
+
+    const auto decision = engine.evaluate(
+        order,
+        portfolio_state
+    );
+
+    EXPECT_TRUE(decision.is_rejected());
+    EXPECT_EQ(decision.reason(), "blocked");
+    EXPECT_TRUE(evaluations.empty());
+}
+
+TEST(RiskEngineTest, RejectsNullRule) {
+    RiskEngine engine;
+
+    EXPECT_THROW(
+        engine.add_rule(nullptr),
+        std::invalid_argument
+    );
+}
+
+TEST(RiskEngineTest, ConstructorRejectsNullRule) {
+    std::vector<std::unique_ptr<RiskRule>> rules;
+
+    rules.push_back(nullptr);
+
+    EXPECT_THROW(
+        RiskEngine(std::move(rules)),
+        std::invalid_argument
+    );
 }
 
 } // namespace

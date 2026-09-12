@@ -16,6 +16,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # QuantForge Core Library
 add_library(quantforge-core
    cpp/src/risk/risk_decision.cpp
+   cpp/src/risk/risk_engine.cpp
    cpp/src/risk/max_position_rule.cpp
    cpp/src/order/order_intent.cpp
    cpp/src/portfolio/position.cpp
